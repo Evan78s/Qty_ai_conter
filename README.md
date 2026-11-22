@@ -28,20 +28,20 @@ docs/      部署与运维手册
 index.html 高保真原型（单文件，可直接浏览器打开看效果）
 ```
 
-## 快速开始
+## 一键部署（复制这一行到服务器，回车即可）
 
-### 1. 首次部署（推荐：Docker 一键安装）
-
-一台 Linux 服务器装好 Docker 后，只需一条命令：
+> 前提：Linux 服务器（CentOS / Ubuntu / 宝塔环境均可，内存 ≥ 2G），域名已解析到本机。
 
 ```bash
-git clone <你的仓库地址> /opt/qty && cd /opt/qty
-bash docker/install.sh
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker/boot.sh)
 ```
 
-脚本问 3 个问题（端口 / 管理员账号 / 密码），然后自动拉起「前端 + 后端 + MySQL」、建表、建管理员、生成密钥，完成即可用。
+这一行会自动完成：**装 Docker → 拉源码 → 问你 3 个问题（端口 / 管理员账号 / 密码）→ 起 MySQL+后端+前端 → 建表建管理员 → 输出网址和账号密码**。全程不用手动建库、不用配 Nginx。
 
-**详细步骤见 [`docs/Docker一键部署.md`](docs/Docker一键部署.md)**（含私有仓库 SSH key、HTTPS、备份、各端安装）。
+> **私有仓库注意**：上面这条纯链接命令要求仓库为**公开**（代码无敏感信息，`install.json`、`.env` 均未入库）。若保持私有，需先到 GitHub 仓库 Settings → General → 最底部 Danger Zone → **Change visibility → Public**，然后再复制执行。
+> 若必须保持私有，则改用带只读令牌的方式（见 [`docs/Docker一键部署.md`](docs/Docker一键部署.md) 的「私有仓库」小节）。
+
+**详细步骤见 [`docs/Docker一键部署.md`](docs/Docker一键部署.md)**（含私有仓库令牌、HTTPS、备份、各端安装）。
 
 > 传统手动部署（宝塔 + 原生 MySQL + systemd）仍保留，见 [`docs/部署与运维手册.md`](docs/部署与运维手册.md)。
 

@@ -5,6 +5,48 @@
 
 ---
 
+## 🚀 一键部署（复制这一行，回车）
+
+在一台干净的 Linux 服务器上（内存 ≥ 2G），**复制下面整行**到终端执行：
+
+```bash
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker/boot.sh)
+```
+
+它会自动：**装 Docker → 拉源码 → 问 3 个问题 → 起容器 → 建表建管理员 → 输出网址和账号密码**。
+3 个问题分别是：对外端口（默认 80）、管理员账号（默认 admin）、管理员密码（≥8 位，留空随机生成）。
+
+看到下面这样就装好了：
+
+```
+============================================
+  安装完成！
+  访问地址：http://服务器IP:80
+  管理员：admin
+  密码：xxxx（请保存，只显示一次）
+============================================
+```
+
+> ⚠️ **这条命令要求仓库是「公开」的**（代码无敏感信息，密码配置 `install.json`/`.env` 均未入库）。
+> 当前仓库为私有，请先到 GitHub 仓库 **Settings → General → 最底部 Danger Zone → Change visibility → Public**，然后执行上面的命令。
+> 若要保持私有，用下面「方式 B：私有仓库」的带令牌命令。
+
+<details>
+<summary><b>方式 B：保持私有仓库（用只读令牌，仍是一条命令）</b></summary>
+
+1. 到 GitHub → 头像 → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token，只勾 `repo` 下的 `public_repo` 对私有库无效，需勾 **`repo`（完整）** 或用细粒度令牌只给这一个仓库的 **Contents: Read** 权限。生成后复制令牌（只显示一次）。
+2. 在服务器复制下面这行（把 `粘贴令牌` 换成你的令牌）：
+
+```bash
+sudo GH_TOKEN="粘贴令牌" bash <(curl -fsSL -H "Authorization: Bearer 粘贴令牌" https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker/boot.sh)
+```
+
+脚本内部会用这个令牌拉取私有源码，其余步骤与公开方式完全一样。
+
+</details>
+
+---
+
 ## 前提（只做一次）
 
 服务器需要 Docker。如果没有，先装：
