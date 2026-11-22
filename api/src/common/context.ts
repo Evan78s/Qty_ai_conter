@@ -8,7 +8,7 @@ export interface AuthUser {
   visibleStoreIds: string[]; // 公司总管理员为 ['*'] 表示全部门店
   isSuper: boolean;          // 兼容旧判断：等同 isPlatform
   isPlatform: boolean;       // 公司总管理员（super_admin，管理本公司所有分店）
-  isTenantAdmin: boolean;    // 历史字段，始终为 false（单公司部署无此角色）
+  isTenantAdmin: boolean;    // 历史字段，始终为 false（连锁店版部署无此角色）
   tenantId: string | null;   // 本公司标识（历史字段，全库唯一，不再用于切换）
 }
 

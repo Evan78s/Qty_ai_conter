@@ -31,7 +31,7 @@ export class AuthGuard implements CanActivate {
     let permissions: Record<string, number> = {};
     try { permissions = JSON.parse(role?.permissions || '{}'); } catch { /* ignore */ }
 
-    // 单公司部署：一套系统 = 一家公司 = 一个数据库，不存在跨租户切换。
+    // 连锁店版部署：一套系统 = 一家公司 = 一个数据库，不存在跨租户切换。
     // 历史库表仍保留 tenant_id 字段（平滑升级），但不再接受 X-Tenant-Id 指定其它公司。
     const isPlatform = user.roleCode === 'super_admin'; // 公司总管理员
     const tenantId: string | null = user.tenantId;

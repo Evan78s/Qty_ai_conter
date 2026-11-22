@@ -123,7 +123,7 @@ export class AuthService {
   async me(user: any) {
     const links = await db.select().from(schema.userStores).where(eq(schema.userStores.userId, user.id));
     const allStores = await db.select().from(schema.stores);
-    // 单公司部署：总管理员与审计看全部门店，其余只按 user_stores 授权（不再按 tenant 过滤）
+    // 连锁店版部署：总管理员与审计看全部门店，其余只按 user_stores 授权（不再按 tenant 过滤）
     const scoped = user.isPlatform || user.isSuper || user.roleCode === 'auditor'
       ? allStores
       : allStores.filter((s) => links.some((l) => l.storeId === s.id));

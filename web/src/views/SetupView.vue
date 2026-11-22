@@ -56,7 +56,7 @@
       <!-- step 2: 管理员账号 -->
       <div v-if="step === 2" class="sbody">
         <h2>创建公司总管理员</h2>
-        <p class="muted">这个账号拥有系统最高权限，可管理本公司所有分店和系统设置。这套系统只服务你这一家公司，其他公司需各自独立部署。</p>
+        <p class="muted">这个账号拥有系统最高权限，可管理连锁所有分店和系统设置。本系统为连锁店版，服务你这一家连锁企业的多门店运营；其他企业需各自下载、独立部署。</p>
         <div class="grid2">
           <label>登录账号<input v-model="form.adminUsername" placeholder="admin" /></label>
           <label>显示名称<input v-model="form.adminName" placeholder="总管理员" /></label>

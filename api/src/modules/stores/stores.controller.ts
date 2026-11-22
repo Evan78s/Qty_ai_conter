@@ -27,7 +27,7 @@ export class StoresController {
   @RequirePerm('system', PERM.EDIT)
   async create(@Req() req: Request, @Body() body: { name: string; address?: string; managerName?: string; staffCount?: number }) {
     const user = (req as any).authUser as AuthUser;
-    // 单公司部署：tenantId 取公司内部占位的那条记录，不对外暴露"选租户"
+    // 连锁店版部署：tenantId 取公司内部占位的那条记录，不对外暴露"选租户"
     const [company] = await db.select().from(schema.tenants).limit(1);
     const tenantId = company?.id || user.tenantId || '';
     const id = newId('sto');

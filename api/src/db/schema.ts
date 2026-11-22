@@ -3,7 +3,7 @@
  *
  * v5 架构：MySQL 只做「系统库」——账号/角色/权限/会话/飞书凭证/品牌设置/审计/同步映射。
  * 业务数据（业绩/投流/知识库/AI回复等）全部存飞书表格，本地不留副本（仅 sync_mappings 存只读降级快照）。
- * 单公司部署：tenants 表与各表 tenant_id 字段仅作内部占位保留（平滑升级，不动表结构），不对外暴露"租户"概念。
+ * 连锁店版部署：tenants 表与各表 tenant_id 字段仅作内部占位保留（平滑升级，不动表结构），不对外暴露"租户"概念。
  *
  * 约束：varchar(36) 文本主键、bigint 毫秒时间戳、boolean 布尔、TEXT 存 JSON 字符串、
  *       各表保留 tenant_id 字段作为内部占位（全库唯一公司，平滑升级），门店级数据叠加 store_id。
@@ -38,7 +38,7 @@ export const tenants = mysqlTable('tenants', {
 
 export const roles = mysqlTable('roles', {
   id: id('id'),
-  code: varchar('code', { length: 48 }).notNull().unique(), // super_admin/store_manager/staff/auditor（单公司：无租户/平台角色）
+  code: varchar('code', { length: 48 }).notNull().unique(), // super_admin/store_manager/staff/auditor（连锁店版：无租户/平台角色）
   name: varchar('name', { length: 64 }).notNull(),
   permissions: text('permissions').notNull().default('{}'), // JSON: 模块 -> VEAX 位
   isSystem: boolean('is_system').notNull().default(true),

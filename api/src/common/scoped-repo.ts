@@ -1,7 +1,7 @@
 /**
  * 统一门店隔离仓储：所有带 store_id 的查询都经此层。
  * 从 AuthUser.visibleStoreIds 自动注入过滤；'*' 表示全部。
- * 单公司部署：visibleStoreIds 已由 AuthGuard 按门店授权生成，这里只做展开与校验。
+ * 连锁店版部署：visibleStoreIds 已由 AuthGuard 按门店授权生成，这里只做展开与校验。
  */
 import { db, schema } from '../db';
 import { AuthUser } from './context';

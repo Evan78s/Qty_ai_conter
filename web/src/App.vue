@@ -36,6 +36,8 @@
         <div class="sb-meta">
           <span>{{ APP_VERSION }}</span>
           <span class="sep">·</span>
+          <span>{{ APP_EDITION }}</span>
+          <span class="sep">·</span>
           <span>{{ APP_AUTHOR }}</span>
         </div>
       </div>
@@ -81,7 +83,7 @@ import { ElMessage } from 'element-plus';
 import { Menu, Bell, Grid, Shop, Document, DataAnalysis, Headset, VideoCamera, MagicStick, Lock, Setting, Connection, Phone, Files } from '@element-plus/icons-vue';
 import { useAppStore } from './stores/app';
 import { api } from './api';
-import { APP_VERSION, APP_AUTHOR } from './version';
+import { APP_VERSION, APP_EDITION, APP_AUTHOR } from './version';
 import { BRAND } from './brand';
 
 const route = useRoute();

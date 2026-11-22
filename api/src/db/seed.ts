@@ -1,5 +1,5 @@
 /** 初始化种子数据：公司占位 + 4 个角色 + 3 家门店 + 5 个 AI 场景 + 品牌设置。可重复执行（幂等）。
- *  单公司部署：tenants 表仅保留一条内部占位记录（平滑升级，不删表），不对外暴露"租户"概念。 */
+ *  连锁店版部署：tenants 表仅保留一条内部占位记录（平滑升级，不删表），不对外暴露"租户"概念。 */
 import { db, closeDb, schema } from './index';
 import { newId } from './schema';
 import { eq } from 'drizzle-orm';

@@ -17,7 +17,7 @@ export class UsersController {
   async list(@Req() req: Request) {
     const user = (req as any).authUser as AuthUser;
     const all = await db.select().from(schema.users);
-    // 单公司部署：公司总管理员看全部用户；店长/员工只看与自己同门店的用户
+    // 连锁店版部署：公司总管理员看全部用户；店长/员工只看与自己同门店的用户
     if (user.isPlatform) return all.map(this.sanitize);
     const links = await db.select().from(schema.userStores);
     const inScopeStores = links.filter((l) => user.visibleStoreIds.includes(l.storeId)).map((l) => l.userId);
@@ -29,7 +29,7 @@ export class UsersController {
   @RequirePerm('system', PERM.EDIT)
   async create(@Req() req: Request, @Body() body: { username: string; displayName: string; password: string; roleCode: string; storeIds?: string[] }) {
     const user = (req as any).authUser as AuthUser;
-    // 单公司部署：tenantId 统一取公司内部占位，不接受前端传入
+    // 连锁店版部署：tenantId 统一取公司内部占位，不接受前端传入
     const [company] = await db.select().from(schema.tenants).limit(1);
     const tenantId = company?.id || null;
     const id = await this.authService.createUser({ ...body, tenantId });

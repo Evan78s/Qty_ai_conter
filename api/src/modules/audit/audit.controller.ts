@@ -13,7 +13,7 @@ export class AuditController {
     const user = (req as any).authUser as AuthUser;
     let rows = await db.select().from(schema.auditLogs).orderBy(desc(schema.auditLogs.createdAt)).limit(200);
     if (!user.isPlatform) {
-      // 单公司部署：非总管理员只看与自己可见门店相关的审计
+      // 连锁店版部署：非总管理员只看与自己可见门店相关的审计
       rows = rows.filter((r) => !r.storeId || user.visibleStoreIds.includes(r.storeId));
     }
     return rows;
