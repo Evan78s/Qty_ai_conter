@@ -36,16 +36,18 @@ else
   chmod 600 "$ROOT/api/.env"; chown yyh:yyh "$ROOT/api/.env"
 fi
 
-echo "==> [6/6] 迁移表结构 + 种子数据（MySQL，凭据从 .env 读取）"
-cd "$ROOT/api"
-set -a
-source "$ROOT/api/.env"
-set +a
-node -e "require('./dist/db/migrate.js')"
-node -e "require('./dist/db/seed.js')"
-mkdir -p "$ROOT/data/uploads/logo" "$ROOT/data/backups"
-chown -R yyh:yyh "$ROOT/data"
+echo "==> [6/6] 数据目录准备（建表交由网页安装向导，未安装时不连库）"
+mkdir -p "$ROOT/api/data" "$ROOT/data/uploads/logo" "$ROOT/data/backups"
+chown -R yyh:yyh "$ROOT/api/data" "$ROOT/data"
 
-echo "==> 完成。请配置 Nginx / systemd 后执行："
-echo "    sudo systemctl enable --now yangyuanhui"
-echo "    sudo bash $ROOT/scripts/bootstrap-admin.sh"
+# 已安装实例：平滑增量迁移（新列/新索引缺则补，不动已有数据）；未安装则跳过，等网页向导建表。
+if [ -f "$ROOT/api/data/install.json" ]; then
+  echo "==> 检测到已安装实例，检查数据库增量迁移…"
+  cd "$ROOT/api"
+  node -e "require('./dist/db/migrate.js')" || echo "!! 增量迁移失败，请检查数据库配置，服务仍会启动"
+fi
+
+echo "==> 完成。接下来："
+echo "    1) 配置 Nginx 让浏览器可访问（见 docs）"
+echo "    2) sudo systemctl daemon-reload && sudo systemctl enable --now yangyuanhui"
+echo "    3) 浏览器打开 http://你的域名/setup 走安装向导（建表/建管理员/密钥）"
