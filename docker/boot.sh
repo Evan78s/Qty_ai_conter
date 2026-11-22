@@ -10,7 +10,7 @@ set -euo pipefail
 
 REPO="Evan78s/Qty_ai_conter"
 BRANCH="master"
-DEST="${QTY_INSTALL_DIR:-/opt/qty}"
+DEST="${QTY_INSTALL_DIR:-/www/docker}"
 
 echo ""
 echo "============================================================"
