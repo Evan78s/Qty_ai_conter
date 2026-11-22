@@ -10,7 +10,7 @@ set -euo pipefail
 
 REPO="Evan78s/Qty_ai_conter"
 BRANCH="master"
-DEST="${QTY_INSTALL_DIR:-/www/docker}"
+DEST="${QTY_INSTALL_DIR:-/www/docker/qtyai}"
 
 echo ""
 echo "============================================================"
@@ -53,6 +53,12 @@ else
   else
     CLONE_URL="https://github.com/${REPO}.git"
     echo "==> 拉取公开仓库…"
+  fi
+  if [ -e "$DEST" ] && [ -n "$(ls -A "$DEST" 2>/dev/null)" ]; then
+    echo "✗ 目标目录 $DEST 已存在且非空，但不是本系统的源码目录。"
+    echo "  请换一个目录后重试：QTY_INSTALL_DIR=/你的/目录 bash $0"
+    echo "  或手动删除该目录后重试：rm -rf $DEST"
+    exit 1
   fi
   mkdir -p "$(dirname "$DEST")"
   git clone -b "$BRANCH" "$CLONE_URL" "$DEST"

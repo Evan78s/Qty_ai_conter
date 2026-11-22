@@ -89,8 +89,8 @@ Host qty-github
 EOF
 chmod 600 ~/.ssh/config
 
-git clone qty-github:Evan78s/Qty_ai_conter.git /www/docker
-cd /www/docker
+git clone qty-github:Evan78s/Qty_ai_conter.git /www/docker/qtyai
+cd /www/docker/qtyai
 ```
 
 ### 2. 一键安装
@@ -120,7 +120,7 @@ bash docker/install.sh
 
 浏览器打开 `http://服务器IP` 即可登录（首次会强制改密）。
 
-> 🔴 **立刻保存管理员密码**。密码也存在 `/www/docker/docker/.env`，请妥善保管，别外传。
+> 🔴 **立刻保存管理员密码**。密码也存在 `/www/docker/qtyai/docker/.env`，请妥善保管，别外传。
 
 ---
 
@@ -147,7 +147,7 @@ bash docker/install.sh
 ```bash
 # 在服务器上装 Caddy（或用宝塔的反代/证书功能）
 # 把 80 端口让给 Caddy，把 docker 的 HTTP_PORT 改成 8080
-cd /www/docker
+cd /www/docker/qtyai
 sed -i 's/^HTTP_PORT=.*/HTTP_PORT=8080/' docker/.env
 docker compose -f docker/docker-compose.yml --env-file docker/.env up -d
 
@@ -167,7 +167,7 @@ Caddy 会自动申请和续期 Let's Encrypt 证书。之后 `https://你的域�
 ## 日常运维
 
 ```bash
-cd /www/docker
+cd /www/docker/qtyai
 
 # 查看状态
 docker compose -f docker/docker-compose.yml ps
@@ -184,7 +184,7 @@ docker cp qty-api:/app/data/install.json install.json.bak_$(date +%F)
 
 # 定时备份（每天凌晨2点）
 crontab -e
-# 0 2 * * * cd /www/docker && docker exec qty-mysql mysqldump -uroot -p$(grep MYSQL_ROOT_PASSWORD docker/.env | cut -d= -f2) yangyuanhui | gzip > /www/docker/backup_$(date +\%F).sql.gz
+# 0 2 * * * cd /www/docker/qtyai && docker exec qty-mysql mysqldump -uroot -p$(grep MYSQL_ROOT_PASSWORD docker/.env | cut -d= -f2) yangyuanhui | gzip > /www/docker/qtyai/backup_$(date +\%F).sql.gz
 ```
 
 ---
@@ -194,7 +194,7 @@ crontab -e
 以后我发布新版后，你只需：
 
 ```bash
-cd /www/docker
+cd /www/docker/qtyai
 git pull
 docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
 ```

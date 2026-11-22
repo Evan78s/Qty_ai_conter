@@ -68,7 +68,7 @@ VITE_DEMO=true npm run dev
 ## 升级
 
 ```bash
-cd /www/docker
+cd /www/docker/qtyai
 git pull
 docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
 ```
