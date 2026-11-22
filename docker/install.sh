@@ -43,8 +43,17 @@ if ! [[ "$ADMIN_USER" =~ ^[A-Za-z0-9_]+$ ]]; then
   echo "✗ 管理员账号只能用字母、数字、下划线"; exit 1
 fi
 
-read -r -s -p "③ 管理员密码（至少8位，直接回车则随机生成）: " ADMIN_PASS
-echo ""
+# 优先用环境变量 ADMIN_PASSWORD（适合含特殊字符、或终端无法输入的情况）
+# 用法：sudo ADMIN_PASSWORD='MyP@ss#123!' bash /tmp/qty-boot.sh
+if [ -n "${ADMIN_PASSWORD:-}" ]; then
+  ADMIN_PASS="$ADMIN_PASSWORD"
+  echo "③ 管理员密码：已通过环境变量读取（${#ADMIN_PASS} 位）"
+else
+  echo "③ 管理员密码（至少 8 位，直接回车则随机生成）"
+  echo "   注意：密码会显示在屏幕上，输入时请确保周围无人。"
+  echo "   若终端无法输入数字或特殊字符，请改用环境变量方式（见文档）。"
+  read -r -p "   请输入密码: " ADMIN_PASS
+fi
 if [ -z "$ADMIN_PASS" ]; then
   ADMIN_PASS="$(openssl rand -hex 10)"
   echo "   已随机生成管理员密码（下面会再显示一次，请保存）"
@@ -58,17 +67,24 @@ DB_PASS="$(openssl rand -hex 20)"
 DB_NAME="yangyuanhui"
 DB_USER="qty"
 
-# ---------- 3. 写 .env ----------
-cat > "$ENV_FILE" <<EOF
-HTTP_PORT=${HTTP_PORT}
-MYSQL_DATABASE=${DB_NAME}
-MYSQL_USER=${DB_USER}
-MYSQL_ROOT_PASSWORD=${DB_ROOT_PASS}
-MYSQL_PASSWORD=${DB_PASS}
-ADMIN_USERNAME=${ADMIN_USER}
-ADMIN_PASSWORD=${ADMIN_PASS}
-ADMIN_NAME=总管理员
-EOF
+# ---------- 3. 写 .env（用 python 写，避免密码中的 $、`、\、" 被 shell 篡改）----------
+"$PYTHON" - "$ENV_FILE" "$HTTP_PORT" "$DB_NAME" "$DB_USER" "$DB_ROOT_PASS" "$DB_PASS" "$ADMIN_USER" "$ADMIN_PASS" <<'PY'
+import sys
+path, port, db, user, rootpw, dbpw, admin_u, admin_p = sys.argv[1:9]
+def q(v):  # 加双引号并转义 \ 和 "，保证 docker compose 读到原样密码
+    return '"' + v.replace('\\', '\\\\').replace('"', '\\"') + '"'
+lines = [
+    f"HTTP_PORT={port}",
+    f"MYSQL_DATABASE={db}",
+    f"MYSQL_USER={user}",
+    f"MYSQL_ROOT_PASSWORD={q(rootpw)}",
+    f"MYSQL_PASSWORD={q(dbpw)}",
+    f"ADMIN_USERNAME={q(admin_u)}",
+    f"ADMIN_PASSWORD={q(admin_p)}",
+    "ADMIN_NAME=总管理员",
+]
+open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+PY
 chmod 600 "$ENV_FILE"
 echo "✓ 配置已写入 docker/.env（权限 600，含密码，请勿外传）"
 

@@ -18,6 +18,18 @@ curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker
 它会自动：**装 Docker → 拉源码 → 问 3 个问题 → 起容器 → 建表建管理员 → 输出网址和账号密码**。
 3 个问题分别是：对外端口（默认 80）、管理员账号（默认 admin）、管理员密码（≥8 位，留空随机生成）。
 
+> 🔑 **密码含特殊字符 / 数字输不进去怎么办？**
+> 部分 SSH 终端在密码输入时数字小键盘或特殊字符（`@ # ! $` 等）会输入异常。两种解决办法：
+>
+> **办法一（推荐）**：用环境变量直接把密码写进命令，绕过交互输入。把 `你的密码` 换成实际密码（用**单引号**包住，里面的单引号用 `'\''` 表示）：
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker/boot.sh -o /tmp/qty-boot.sh && sudo ADMIN_PASSWORD='你的密码' bash /tmp/qty-boot.sh
+> ```
+>
+> **办法二**：交互输入时密码是**可见**的（不隐藏），数字和特殊字符都能正常敲；输入时确认周围无人即可。
+>
+> 密码中的 `$`、反引号、反斜杠、引号都会被正确保存，不会被引号或 shell 篡改。
+
 看到下面这样就装好了：
 
 ```
