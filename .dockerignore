@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/.git
+**/.env
+**/data
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.DS_Store
+.workbuddy
+docs
+index.html
+*.md

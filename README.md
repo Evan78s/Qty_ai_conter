@@ -30,26 +30,24 @@ index.html 高保真原型（单文件，可直接浏览器打开看效果）
 
 ## 快速开始
 
-### 1. 首次部署（需一台 Linux 服务器，已装 MySQL）
+### 1. 首次部署（推荐：Docker 一键安装）
 
-详细步骤见 [`docs/部署与运维手册.md`](docs/部署与运维手册.md) 和 [`docs/阶段1部署清单-照着敲.md`](docs/阶段1部署清单-照着敲.md)。
-
-简述：
+一台 Linux 服务器装好 Docker 后，只需一条命令：
 
 ```bash
-# 1. 传源码到服务器（不要传 .env / data/install.json，这些在服务器本地生成）
-# 2. 配置 api/.env（参考 api/.env.example），填入 MySQL 连接与安全密钥
-# 3. 用生产模式构建并部署
-sudo bash scripts/deploy.sh
-# 4. 启动服务
-sudo systemctl restart yangyuanhui
+git clone <你的仓库地址> /opt/qty && cd /opt/qty
+bash docker/install.sh
 ```
 
-### 2. Web 安装向导
+脚本问 3 个问题（端口 / 管理员账号 / 密码），然后自动拉起「前端 + 后端 + MySQL」、建表、建管理员、生成密钥，完成即可用。
 
-服务启动后，浏览器访问你的域名，会进入安装向导：配置数据库 → 建表 → 生成密钥 → 创建公司总管理员。完成后即可登录使用。
+**详细步骤见 [`docs/Docker一键部署.md`](docs/Docker一键部署.md)**（含私有仓库 SSH key、HTTPS、备份、各端安装）。
 
-安装配置保存在服务器本地 `data/install.json`（**不入 git**，升级时不会被覆盖）。
+> 传统手动部署（宝塔 + 原生 MySQL + systemd）仍保留，见 [`docs/部署与运维手册.md`](docs/部署与运维手册.md)。
+
+### 2. 各端使用（PWA，无需下载 App）
+
+系统内置 PWA：手机/平板用浏览器打开网址后「添加到主屏幕」、电脑用 Chrome/Edge「安装」，即可像原生 App 一样全屏使用，且每次打开都是最新版。配 HTTPS 域名后体验完整。
 
 ### 3. 本地开发预览（演示模式）
 
@@ -69,4 +67,17 @@ VITE_DEMO=true npm run dev
 
 ## 升级
 
-当前版本需手动更新源码后重跑 `scripts/deploy.sh`。后台一键升级（连接 GitHub Releases）将在后续版本提供。
+```bash
+cd /opt/qty
+git pull
+docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
+```
+
+数据卷保留，数据不丢。后台一键升级（系统设置里点按钮）将在后续版本提供。
+
+## 目录补充
+
+```
+docker/    Docker 一键部署（Dockerfile / compose / install.sh / 配置模板）
+web/public/ PWA 资源（manifest / sw.js / 各尺寸图标）
+```

@@ -48,7 +48,8 @@ async function bootstrap() {
     app.enableCors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://localhost:5175'], credentials: true });
   }
   const port = Number(process.env.PORT || 3000);
-  const host = process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0';
+  // 默认：生产只监听本机（前置 Nginx 同机反代）；Docker 容器需监听 0.0.0.0，用 HOST 覆盖。
+  const host = process.env.HOST || (process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0');
   await app.listen(port, host);
   console.log(`[API] running on http://${host}:${port}`);
   console.log(`[API] 安装状态: ${isInstalled() ? '已安装' : '未安装 → 访问 /setup 完成初始化'}`);

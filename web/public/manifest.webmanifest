@@ -1,0 +1,17 @@
+{
+  "name": "鵲太醫 · AI 运营工作台",
+  "short_name": "鵲太醫",
+  "description": "养生馆 AI 增效 · 多媒体推广运营管理工作台",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1F3B34",
+  "theme_color": "#1F3B34",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
