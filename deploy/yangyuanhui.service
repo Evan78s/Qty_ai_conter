@@ -1,0 +1,19 @@
+# 放到 /etc/systemd/system/yangyuanhui.service
+[Unit]
+Description=YangYuanHui API
+After=network.target
+
+[Service]
+Type=simple
+User=yyh
+Group=yyh
+WorkingDirectory=/opt/yangyuanhui/api
+EnvironmentFile=/opt/yangyuanhui/api/.env
+ExecStart=/usr/bin/node dist/main.js
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

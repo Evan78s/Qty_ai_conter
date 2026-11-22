@@ -1,0 +1,37 @@
+# 依赖
+node_modules/
+**/node_modules/
+
+# 构建产物（部署时在服务器用生产模式重新构建）
+dist/
+**/dist/
+api/dist/
+
+# 敏感配置：绝不入 git
+.env
+**/.env
+!.env.example
+data/install.json
+**/data/install.json
+
+# 本地数据库文件（生产用 MySQL，不留本地副本）
+*.db
+*.db-shm
+*.db-wal
+api/data/
+
+# 日志
+*.log
+npm-debug.log*
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# WorkBuddy 工作数据（非交付内容）
+.workbuddy/
+
+# 编辑器
+.idea/
+.vscode/
+*.swp

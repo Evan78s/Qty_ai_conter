@@ -1,0 +1,204 @@
+<template>
+  <div class="page-wrap">
+    <div class="page-head">
+      <div><h2>系统设置</h2><p class="sub">飞书授权、门店表格绑定、品牌与数据库</p></div>
+    </div>
+
+    <el-tabs v-model="tab" class="settings-tabs">
+      <!-- 飞书授权 -->
+      <el-tab-pane label="飞书授权" name="feishu">
+        <div class="panel">
+          <div class="panel-head">
+            <div><h3>统一飞书凭证</h3><p class="hint">一把钥匙管所有表格。授权后全系统写入飞书都用它，各店再绑定各自的表格。</p></div>
+            <el-button type="primary" size="small" @click="openCred()">+ 添加凭证</el-button>
+          </div>
+          <el-table :data="credentials" size="small" v-loading="loading">
+            <el-table-column prop="appId" label="App ID" />
+            <el-table-column prop="credentialsMasked" label="App Secret" />
+            <el-table-column prop="scope" label="范围"><template #default="{ row }">{{ row.scope === 'platform' ? '公司默认' : '门店专用' }}</template></el-table-column>
+            <el-table-column prop="status" label="状态"><template #default="{ row }"><el-tag size="small" :type="row.status === 'active' ? 'success' : 'info'">{{ row.status === 'active' ? '启用' : '停用' }}</el-tag></template></el-table-column>
+            <el-table-column label="操作" width="140">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openCred(row)">编辑</el-button>
+                <el-button link type="danger" size="small" @click="delCred(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="help-box">
+            <b>如何授权</b>
+            <ol>
+              <li>到飞书开放平台创建企业自建应用，拿到 App ID 和 App Secret</li>
+              <li>开通「多维表格」相关权限（bitable:app）</li>
+              <li>在这里填入凭证，并把应用添加为各店多维表格的协作者</li>
+            </ol>
+          </div>
+        </div>
+      </el-tab-pane>
+
+      <!-- 门店绑定 -->
+      <el-tab-pane label="门店表格绑定" name="binding">
+        <div class="panel">
+          <div class="panel-head">
+            <div><h3>一店一表</h3><p class="hint">每个分店绑定一个飞书多维表格，该店所有业务数据存在这个表格的不同子表里。</p></div>
+            <el-button type="primary" size="small" @click="openBinding()">+ 绑定门店</el-button>
+          </div>
+          <el-table :data="bindings" size="small" v-loading="loading">
+            <el-table-column prop="storeName" label="门店" width="140" />
+            <el-table-column prop="appToken" label="app_token" />
+            <el-table-column label="子表" ><template #default="{ row }"><span class="tag-list"><el-tag v-for="(v,k) in row.tableIds" :key="k" size="small" type="info">{{ k }}</el-tag></span></template></el-table-column>
+            <el-table-column prop="ownerName" label="授权人" width="100" />
+            <el-table-column prop="status" label="状态" width="90"><template #default="{ row }"><el-tag size="small" :type="row.status === 'active' ? 'success' : 'warning'">{{ row.status === 'active' ? '正常' : '已断开' }}</el-tag></template></el-table-column>
+            <el-table-column label="操作" width="140">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openBinding(row)">编辑</el-button>
+                <el-button link size="small" @click="openBase(row)">打开表格</el-button>
+                <el-button link type="danger" size="small" @click="delBinding(row)">解绑</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </el-tab-pane>
+
+      <!-- 品牌 -->
+      <el-tab-pane label="平台品牌" name="brand">
+        <div class="panel narrow">
+          <h3>平台标识</h3>
+          <p class="hint">修改后所有端刷新即生效。</p>
+          <el-form label-position="top" class="brand-form">
+            <el-form-item label="平台名称"><el-input v-model="brandForm.platformName" /></el-form-item>
+            <el-form-item label="Logo 文字"><el-input v-model="brandForm.logoText" maxlength="4" /></el-form-item>
+            <el-form-item label="Logo 图片地址（可选）">
+              <el-input v-model="brandForm.logoUrl" placeholder="/logo.ico 或 https://..." />
+              <img v-if="brandForm.logoUrl" :src="brandForm.logoUrl" alt="logo 预览" style="width:40px;height:40px;object-fit:contain;background:#fff;border:1px solid var(--line,#e5e7eb);border-radius:8px;margin-top:8px;padding:2px" />
+            </el-form-item>
+            <el-form-item label="副标题"><el-input v-model="brandForm.subtitle" /></el-form-item>
+            <el-button type="primary" :loading="saving" @click="saveBrand">保存</el-button>
+          </el-form>
+        </div>
+      </el-tab-pane>
+
+      <!-- 数据库 -->
+      <el-tab-pane label="数据库" name="database">
+        <div class="panel">
+          <h3>数据库连接状态</h3>
+          <div v-if="dbInfo" class="db-grid">
+            <div><span>状态</span><b :class="dbInfo.reachable ? 'ok' : 'bad'">{{ dbInfo.reachable ? '● 已连接' : '● 未连接' }}</b></div>
+            <div><span>地址</span><b>{{ dbInfo.config?.host }}:{{ dbInfo.config?.port }}</b></div>
+            <div><span>库名</span><b>{{ dbInfo.config?.name }}</b></div>
+            <div><span>用户</span><b>{{ dbInfo.config?.user }}</b></div>
+            <div><span>数据表</span><b>{{ dbInfo.tableCount }} 张（系统表 {{ dbInfo.systemTables }}）</b></div>
+          </div>
+          <div class="table-list"><el-tag v-for="t in dbInfo?.tables || []" :key="t" size="small" type="info">{{ t }}</el-tag></div>
+          <div class="help-box">
+            <b>说明</b>
+            <p>数据库连接信息在系统安装时配置，存于服务器 <code>data/install.json</code>。如需更换数据库，请修改该文件后重启服务，或在安装向导首次配置时填入。</p>
+          </div>
+        </div>
+      </el-tab-pane>
+    </el-tabs>
+
+    <!-- 飞书凭证弹窗 -->
+    <el-dialog v-model="credDialog" :title="credForm.id ? '编辑飞书凭证' : '添加飞书凭证'" width="480px">
+      <el-form label-position="top">
+        <el-form-item label="App ID"><el-input v-model="credForm.appId" placeholder="cli_xxx" /></el-form-item>
+        <el-form-item label="App Secret"><el-input v-model="credForm.appSecret" type="password" show-password placeholder="不填则保持原值" /></el-form-item>
+        <el-form-item label="范围"><el-select v-model="credForm.scope" style="width:100%"><el-option label="公司默认" value="platform" /><el-option label="门店专用" value="tenant" /></el-select></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="credDialog = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveCred">保存</el-button></template>
+    </el-dialog>
+
+    <!-- 门店绑定弹窗 -->
+    <el-dialog v-model="bindDialog" :title="bindForm.id ? '编辑门店绑定' : '绑定门店表格'" width="560px">
+      <el-form label-position="top">
+        <el-form-item label="门店"><el-select v-model="bindForm.storeId" style="width:100%" :disabled="!!bindForm.id"><el-option v-for="s in storeList" :key="s.id" :label="s.name" :value="s.id" /></el-select></el-form-item>
+        <el-form-item label="多维表格 app_token"><el-input v-model="bindForm.appToken" placeholder="bascnxxx" /></el-form-item>
+        <el-form-item label="表格链接（可选，便于跳转）"><el-input v-model="bindForm.baseUrl" placeholder="https://xxx.feishu.cn/base/..." /></el-form-item>
+        <el-form-item label="使用凭证"><el-select v-model="bindForm.credentialId" style="width:100%" clearable placeholder="公司默认"><el-option v-for="c in credentials" :key="c.id" :label="c.appId" :value="c.id" /></el-select></el-form-item>
+        <el-divider content-position="left">子表 table_id</el-divider>
+        <div class="grid2">
+          <el-form-item v-for="k in tableKeys" :key="k" :label="tableLabel(k)"><el-input v-model="bindForm.tableIds[k]" size="small" placeholder="tblxxx" /></el-form-item>
+        </div>
+      </el-form>
+      <template #footer><el-button @click="bindDialog = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveBinding">保存绑定</el-button></template>
+    </el-dialog>
+  </div>
+</template>
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { api } from '../api';
+
+const tab = ref('feishu');
+const loading = ref(false);
+const saving = ref(false);
+const credentials = ref<any[]>([]);
+const bindings = ref<any[]>([]);
+const storeList = ref<any[]>([]);
+const brandForm = reactive<any>({ platformName: '', logoUrl: '', logoText: '', subtitle: '' });
+const dbInfo = ref<any>(null);
+
+const tableKeys = ['performance', 'dsp', 'kb', 'replies', 'queue', 'social', 'materials', 'push'];
+const tableLabel = (k: string) => ({ performance: '每日业绩', dsp: '投流洞察', kb: '客服知识库', replies: 'AI回复', queue: '待人工接待', social: '自媒体', materials: '素材', push: '推送配置' } as any)[k] || k;
+
+async function load() {
+  loading.value = true;
+  try {
+    const [c, b, s, br, d] = await Promise.all([
+      api.feishuCredentials(), api.bindings(), api.settingStores(), api.brand(), api.dbStatus(),
+    ]);
+    credentials.value = c; bindings.value = b; storeList.value = s;
+    Object.assign(brandForm, br);
+    dbInfo.value = d;
+  } catch (e: any) { ElMessage.error(e.message || '加载失败'); }
+  finally { loading.value = false; }
+}
+onMounted(load);
+
+/* 凭证 */
+const credDialog = ref(false);
+const credForm = reactive<any>({ id: '', appId: '', appSecret: '', scope: 'platform' });
+function openCred(row?: any) {
+  Object.assign(credForm, row ? { id: row.id, appId: row.appId, appSecret: '', scope: row.scope } : { id: '', appId: '', appSecret: '', scope: 'platform' });
+  credDialog.value = true;
+}
+async function saveCred() {
+  saving.value = true;
+  try { await api.saveFeishuCredential(credForm); ElMessage.success('已保存'); credDialog.value = false; await load(); }
+  catch (e: any) { ElMessage.error(e.message || '保存失败'); }
+  finally { saving.value = false; }
+}
+async function delCred(row: any) {
+  await ElMessageBox.confirm(`删除凭证 ${row.appId}？`, '确认', { type: 'warning' });
+  try { await api.deleteCredential(row.id); ElMessage.success('已删除'); await load(); }
+  catch (e: any) { ElMessage.error(e.message || '删除失败'); }
+}
+
+/* 绑定 */
+const bindDialog = ref(false);
+const bindForm = reactive<any>({ id: '', storeId: '', appToken: '', baseUrl: '', credentialId: '', tableIds: {} });
+function openBinding(row?: any) {
+  if (row) Object.assign(bindForm, { id: row.id, storeId: row.storeId, appToken: row.appToken, baseUrl: row.baseUrl, credentialId: row.credentialId, tableIds: { ...row.tableIds } });
+  else Object.assign(bindForm, { id: '', storeId: '', appToken: '', baseUrl: '', credentialId: '', tableIds: {} });
+  bindDialog.value = true;
+}
+async function saveBinding() {
+  saving.value = true;
+  try { await api.saveBinding(bindForm); ElMessage.success('绑定已保存'); bindDialog.value = false; await load(); }
+  catch (e: any) { ElMessage.error(e.message || '保存失败'); }
+  finally { saving.value = false; }
+}
+async function delBinding(row: any) {
+  await ElMessageBox.confirm(`解绑 ${row.storeName} 的表格？数据仍保留在飞书。`, '确认', { type: 'warning' });
+  try { await api.deleteBinding(row.id); ElMessage.success('已解绑'); await load(); }
+  catch (e: any) { ElMessage.error(e.message || '解绑失败'); }
+}
+function openBase(row: any) { if (row.baseUrl) window.open(row.baseUrl, '_blank'); else ElMessage.warning('未填写表格链接'); }
+
+/* 品牌 */
+async function saveBrand() {
+  saving.value = true;
+  try { await api.saveBrand(brandForm); ElMessage.success('品牌设置已保存'); }
+  catch (e: any) { ElMessage.error(e.message || '保存失败'); }
+  finally { saving.value = false; }
+}
+</script>
