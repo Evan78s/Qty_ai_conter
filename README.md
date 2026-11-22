@@ -33,7 +33,7 @@ index.html 高保真原型（单文件，可直接浏览器打开看效果）
 > 前提：Linux 服务器（CentOS / Ubuntu / 宝塔环境均可，内存 ≥ 2G），域名已解析到本机。
 
 ```bash
-sudo bash <(curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker/boot.sh)
+curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker/boot.sh -o /tmp/qty-boot.sh && sudo bash /tmp/qty-boot.sh
 ```
 
 这一行会自动完成：**装 Docker → 拉源码 → 问你 3 个问题（端口 / 管理员账号 / 密码）→ 起 MySQL+后端+前端 → 建表建管理员 → 输出网址和账号密码**。全程不用手动建库、不用配 Nginx。

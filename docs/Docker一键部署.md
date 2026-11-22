@@ -10,8 +10,10 @@
 在一台干净的 Linux 服务器上（内存 ≥ 2G），**复制下面整行**到终端执行：
 
 ```bash
-sudo bash <(curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker/boot.sh)
+curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker/boot.sh -o /tmp/qty-boot.sh && sudo bash /tmp/qty-boot.sh
 ```
+
+> 之所以先下载到 `/tmp` 再执行，而不是 `sudo bash <(curl ...)`：后者在部分系统会因 sudo 不转发 `/dev/fd/63` 而报 `No such file or directory`。这种方式任何 Linux 都通用。
 
 它会自动：**装 Docker → 拉源码 → 问 3 个问题 → 起容器 → 建表建管理员 → 输出网址和账号密码**。
 3 个问题分别是：对外端口（默认 80）、管理员账号（默认 admin）、管理员密码（≥8 位，留空随机生成）。
@@ -38,7 +40,7 @@ sudo bash <(curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/m
 2. 在服务器复制下面这行（把 `粘贴令牌` 换成你的令牌）：
 
 ```bash
-sudo GH_TOKEN="粘贴令牌" bash <(curl -fsSL -H "Authorization: Bearer 粘贴令牌" https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker/boot.sh)
+curl -fsSL -H "Authorization: Bearer 粘贴令牌" https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker/boot.sh -o /tmp/qty-boot.sh && sudo GH_TOKEN="粘贴令牌" bash /tmp/qty-boot.sh
 ```
 
 脚本内部会用这个令牌拉取私有源码，其余步骤与公开方式完全一样。
