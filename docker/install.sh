@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # 鵲太醫 AI 运营工作台 · Docker 一键安装
 # 用法：把源码放到服务器后，执行  bash docker/install.sh
+# 断点续装：若 docker/.env 已存在，自动复用端口与密码，不会重新生成。
+# 自定义端口：HTTP_PORT=8080 bash docker/install.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -33,41 +35,140 @@ if ! command -v openssl >/dev/null 2>&1; then
   exit 1
 fi
 
-# ---------- 1. 询问必要信息 ----------
-read -r -p "① 对外访问端口（默认 80，直接回车）: " HTTP_PORT
-HTTP_PORT="${HTTP_PORT:-80}"
+# ---------- 端口工具 ----------
+port_in_use() {
+  local p="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | grep -qE "[:.]$p\$"
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -ltn 2>/dev/null | awk 'NR>2{print $4}' | grep -qE "[:.]$p\$"
+  else
+    return 1
+  fi
+}
+next_free_port() {
+  local p=8080
+  while port_in_use "$p"; do p=$((p+1)); done
+  echo "$p"
+}
 
-read -r -p "② 管理员账号（默认 admin，直接回车）: " ADMIN_USER
-ADMIN_USER="${ADMIN_USER:-admin}"
-if ! [[ "$ADMIN_USER" =~ ^[A-Za-z0-9_]+$ ]]; then
-  echo "✗ 管理员账号只能用字母、数字、下划线"; exit 1
+# ---------- 1. 读取已有配置（断点续装）或首次询问 ----------
+RESUME=0
+if [ -f "$ENV_FILE" ]; then
+  echo "✓ 检测到已有配置 docker/.env，将复用端口与密码（断点续装）"
+  ENV_SOURCE="$(mktemp)"
+  "$PYTHON" - "$ENV_FILE" "$ENV_SOURCE" <<'PY'
+import sys, shlex
+src, out = sys.argv[1:3]
+d = {}
+for line in open(src, encoding='utf-8'):
+    line = line.strip()
+    if not line or line.startswith('#') or '=' not in line:
+        continue
+    k, v = line.split('=', 1)
+    if len(v) >= 2 and v[0] == '"' and v[-1] == '"':
+        v = v[1:-1].replace('\\"', '"').replace('\\\\', '\\')
+    d[k] = v
+mapping = {
+    'HTTP_PORT': 'EXIST_HTTP_PORT',
+    'MYSQL_DATABASE': 'EXIST_DB_NAME',
+    'MYSQL_USER': 'EXIST_DB_USER',
+    'MYSQL_ROOT_PASSWORD': 'EXIST_DB_ROOT_PASS',
+    'MYSQL_PASSWORD': 'EXIST_DB_PASS',
+    'ADMIN_USERNAME': 'EXIST_ADMIN_USER',
+    'ADMIN_PASSWORD': 'EXIST_ADMIN_PASS',
+}
+with open(out, 'w', encoding='utf-8') as f:
+    for k, var in mapping.items():
+        if k in d:
+            f.write(f"{var}={shlex.quote(d[k])}\n")
+PY
+  # shellcheck disable=SC1090
+  source "$ENV_SOURCE"
+  rm -f "$ENV_SOURCE"
+  RESUME=1
 fi
 
-# 优先用环境变量 ADMIN_PASSWORD（适合含特殊字符、或终端无法输入的情况）
-# 用法：sudo ADMIN_PASSWORD='MyP@ss#123!' bash /tmp/qty-boot.sh
-if [ -n "${ADMIN_PASSWORD:-}" ]; then
-  ADMIN_PASS="$ADMIN_PASSWORD"
-  echo "③ 管理员密码：已通过环境变量读取（${#ADMIN_PASS} 位）"
+HTTP_PORT_FROM_ENV=0
+if [ -n "${HTTP_PORT:-}" ]; then HTTP_PORT_FROM_ENV=1; fi
+
+if [ "$RESUME" -eq 1 ]; then
+  HTTP_PORT="${HTTP_PORT:-${EXIST_HTTP_PORT:-80}}"
+  DB_NAME="${EXIST_DB_NAME:-yangyuanhui}"
+  DB_USER="${EXIST_DB_USER:-qty}"
+  DB_ROOT_PASS="${EXIST_DB_ROOT_PASS:-}"
+  DB_PASS="${EXIST_DB_PASS:-}"
+  ADMIN_USER="${EXIST_ADMIN_USER:-admin}"
+  ADMIN_PASS="${EXIST_ADMIN_PASS:-}"
+  echo "① 对外访问端口：${HTTP_PORT}（复用已有配置）"
+  echo "② 管理员账号：${ADMIN_USER}（复用已有配置）"
+  if [ -n "${ADMIN_PASSWORD:-}" ]; then
+    ADMIN_PASS="$ADMIN_PASSWORD"
+    echo "③ 管理员密码：已通过环境变量更新（${#ADMIN_PASS} 位）"
+  else
+    echo "③ 管理员密码：复用已有配置（${#ADMIN_PASS} 位）"
+  fi
 else
-  echo "③ 管理员密码（至少 8 位，直接回车则随机生成）"
-  echo "   注意：密码会显示在屏幕上，输入时请确保周围无人。"
-  echo "   若终端无法输入数字或特殊字符，请改用环境变量方式（见文档）。"
-  read -r -p "   请输入密码: " ADMIN_PASS
-fi
-if [ -z "$ADMIN_PASS" ]; then
-  ADMIN_PASS="$(openssl rand -hex 10)"
-  echo "   已随机生成管理员密码（下面会再显示一次，请保存）"
-elif [ "${#ADMIN_PASS}" -lt 8 ]; then
-  echo "✗ 密码至少 8 位"; exit 1
+  if [ "$HTTP_PORT_FROM_ENV" -eq 1 ]; then
+    echo "① 对外访问端口：${HTTP_PORT}（来自环境变量）"
+  else
+    DEFAULT_HTTP_PORT=80
+    if port_in_use 80; then
+      DEFAULT_HTTP_PORT="$(next_free_port)"
+      echo "⚠ 80 端口已被占用（常见：宝塔 / Nginx / Apache），默认改用 ${DEFAULT_HTTP_PORT}。"
+    fi
+    read -r -p "① 对外访问端口（默认 ${DEFAULT_HTTP_PORT}，直接回车）: " HTTP_PORT
+    HTTP_PORT="${HTTP_PORT:-$DEFAULT_HTTP_PORT}"
+  fi
+
+  read -r -p "② 管理员账号（默认 admin，直接回车）: " ADMIN_USER
+  ADMIN_USER="${ADMIN_USER:-admin}"
+  if ! [[ "$ADMIN_USER" =~ ^[A-Za-z0-9_]+$ ]]; then
+    echo "✗ 管理员账号只能用字母、数字、下划线"; exit 1
+  fi
+
+  # 优先用环境变量 ADMIN_PASSWORD（适合含特殊字符、或终端无法输入的情况）
+  # 用法：sudo ADMIN_PASSWORD='MyP@ss#123!' bash /tmp/qty-boot.sh
+  if [ -n "${ADMIN_PASSWORD:-}" ]; then
+    ADMIN_PASS="$ADMIN_PASSWORD"
+    echo "③ 管理员密码：已通过环境变量读取（${#ADMIN_PASS} 位）"
+  else
+    echo "③ 管理员密码（至少 8 位，直接回车则随机生成）"
+    echo "   注意：密码会显示在屏幕上，输入时请确保周围无人。"
+    echo "   若终端无法输入数字或特殊字符，请改用环境变量方式（见文档）。"
+    read -r -p "   请输入密码: " ADMIN_PASS
+  fi
+  if [ -z "$ADMIN_PASS" ]; then
+    ADMIN_PASS="$(openssl rand -hex 10)"
+    echo "   已随机生成管理员密码（下面会再显示一次，请保存）"
+  elif [ "${#ADMIN_PASS}" -lt 8 ]; then
+    echo "✗ 密码至少 8 位"; exit 1
+  fi
+
+  DB_ROOT_PASS="$(openssl rand -hex 20)"
+  DB_PASS="$(openssl rand -hex 20)"
+  DB_NAME="yangyuanhui"
+  DB_USER="qty"
 fi
 
-# ---------- 2. 生成随机数据库密码 ----------
-DB_ROOT_PASS="$(openssl rand -hex 20)"
-DB_PASS="$(openssl rand -hex 20)"
-DB_NAME="yangyuanhui"
-DB_USER="qty"
+# ---------- 端口校验 ----------
+if ! [[ "$HTTP_PORT" =~ ^[0-9]+$ ]] || [ "$HTTP_PORT" -lt 1 ] || [ "$HTTP_PORT" -gt 65535 ]; then
+  echo "✗ 端口必须是 1-65535 的数字"; exit 1
+fi
+if port_in_use "$HTTP_PORT"; then
+  if [ "$HTTP_PORT_FROM_ENV" -eq 0 ] && [ "$RESUME" -eq 1 ]; then
+    echo "⚠ 配置中的端口 ${HTTP_PORT} 已被占用，自动改用空闲端口。"
+    HTTP_PORT="$(next_free_port)"
+  else
+    echo "✗ 端口 ${HTTP_PORT} 已被占用，请换一个端口后重试。"
+    echo "  查看占用：ss -ltnp | grep ':${HTTP_PORT}'"
+    echo "  指定端口：HTTP_PORT=8080 bash docker/install.sh"
+    exit 1
+  fi
+fi
+echo "→ 本次使用端口：${HTTP_PORT}"
 
-# ---------- 3. 写 .env（用 python 写，避免密码中的 $、`、\、" 被 shell 篡改）----------
+# ---------- 2. 写 .env（用 python 写，避免密码中的 $、`、\、" 被 shell 篡改）----------
 "$PYTHON" - "$ENV_FILE" "$HTTP_PORT" "$DB_NAME" "$DB_USER" "$DB_ROOT_PASS" "$DB_PASS" "$ADMIN_USER" "$ADMIN_PASS" <<'PY'
 import sys
 path, port, db, user, rootpw, dbpw, admin_u, admin_p = sys.argv[1:9]
@@ -88,11 +189,11 @@ PY
 chmod 600 "$ENV_FILE"
 echo "✓ 配置已写入 docker/.env（权限 600，含密码，请勿外传）"
 
-# ---------- 4. 拉起容器 ----------
+# ---------- 3. 拉起容器 ----------
 echo "==> 正在构建并启动容器（首次约需几分钟）…"
 docker compose -f "$ROOT/docker/docker-compose.yml" --env-file "$ENV_FILE" up -d --build
 
-# ---------- 5. 等待 API 就绪 ----------
+# ---------- 4. 等待 API 就绪 ----------
 echo "==> 等待服务就绪…"
 API_URL="http://127.0.0.1:${HTTP_PORT}/api"
 ready=0
@@ -108,7 +209,7 @@ if [ "$ready" -ne 1 ]; then
 fi
 echo "✓ 服务已就绪"
 
-# ---------- 6. 自动安装（建表/种子/管理员/密钥）----------
+# ---------- 5. 自动安装（建表/种子/管理员/密钥）----------
 if grep -q '"installed":true' /tmp/qty-setup-status.json; then
   echo "✓ 系统已安装过，跳过初始化（数据保留）"
 else
@@ -135,7 +236,7 @@ PY
   echo "✓ 初始化完成"
 fi
 
-# ---------- 7. 输出访问信息 ----------
+# ---------- 6. 输出访问信息 ----------
 echo ""
 echo "============================================"
 echo "  安装完成！"

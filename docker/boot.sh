@@ -6,6 +6,8 @@
 #
 # 私有仓库：需先设置 GH_TOKEN（只读令牌），脚本会用令牌拉取源码。
 # 公开仓库：无需任何令牌。
+# 指定端口：sudo HTTP_PORT=8080 bash /tmp/qty-boot.sh
+# 指定管理员密码：sudo ADMIN_PASSWORD='你的密码' bash /tmp/qty-boot.sh
 set -euo pipefail
 
 REPO="Evan78s/Qty_ai_conter"

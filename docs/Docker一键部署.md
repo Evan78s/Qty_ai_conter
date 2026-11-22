@@ -42,8 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker
 ```
 
 > ⚠️ **这条命令要求仓库是「公开」的**（代码无敏感信息，密码配置 `install.json`/`.env` 均未入库）。
-> 当前仓库为私有，请先到 GitHub 仓库 **Settings → General → 最底部 Danger Zone → Change visibility → Public**，然后执行上面的命令。
-> 若要保持私有，用下面「方式 B：私有仓库」的带令牌命令。
+> 当前仓库已设为公开，可直接执行上面的命令。若日后改回私有，用下面「方式 B：私有仓库」的带令牌命令。
 
 <details>
 <summary><b>方式 B：保持私有仓库（用只读令牌，仍是一条命令）</b></summary>
@@ -231,11 +230,40 @@ docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
 
 ## 常见问题
 
+### 🔴 安装到最后报 `bind: address already in use`（80 端口被占用）
+
+典型报错：
+
+```
+Error response from daemon: driver failed programming external connectivity on endpoint qty-web:
+Error starting userland proxy: listen tcp4 0.0.0.0:80: bind: address already in use
+```
+
+原因：宝塔面板的 Nginx / Apache 或其他网站已经占用了 80 端口。**不需要停掉宝塔**，给本系统换一个端口即可（如 8080）。
+
+**一键修复（推荐，已装到一半也能直接续装）：**
+
+```bash
+cd /www/docker/qtyai && git pull && sudo HTTP_PORT=8080 bash docker/install.sh
+```
+
+脚本会自动：检测到 `docker/.env` 已存在 → **复用原来生成的密码和数据库配置（不会重新生成，数据不丢）** → 把端口改成 8080 → 重启容器 → 接着完成初始化。
+
+> 若不确定该用哪个端口，先看看谁占了 80：`ss -ltnp | grep ':80'`。
+> 8080 也被占用的话换 8081、8090 等任意空闲端口，把上面命令里的 `8080` 换掉即可。
+> 脚本也支持自动避让：直接 `bash docker/install.sh` 时若 80 被占用会默认选一个空闲端口。
+
+装完后浏览器访问 `http://服务器IP:8080`（**要带端口号**）。首次安装若中断在起容器那一步，用上面的命令续装即可完成建表和管理员创建。
+
+> 如果打算长期用域名 + HTTPS，建议把端口固定为 8080，再用宝塔反代 / Caddy 把 80/443 转发到本机 8080（见上面「配 HTTPS」一节）。
+
+### 其他问题
+
 | 现象 | 排查 |
 |---|---|
 | `install.sh` 提示无 Docker | 先执行前提里的安装命令 |
 | 拉代码 Permission denied | Deploy key 没加或没生效；`ssh -T qty-github` 重测 |
-| 端口 80 被占用 | 安装时改端口（如 8080），浏览器访问 `http://IP:8080` |
+| 端口被占用 | 见上面「80 端口被占用」一节，用 `HTTP_PORT=8080` 续装 |
 | 初始化失败 | `docker compose -f docker/docker-compose.yml logs api` 看日志 |
 | 打不开网页 | `docker compose -f docker/docker-compose.yml ps` 确认 web 容器在跑 |
 | 忘记管理员密码 | 见 `docker/.env` 的 ADMIN_PASSWORD；还没有就需删卷重装（会丢数据） |

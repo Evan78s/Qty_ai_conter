@@ -38,6 +38,8 @@ curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker
 
 这一行会自动完成：**装 Docker → 拉源码 → 问你 3 个问题（端口 / 管理员账号 / 密码）→ 起 MySQL+后端+前端 → 建表建管理员 → 输出网址和账号密码**。全程不用手动建库、不用配 Nginx。
 
+> 🌐 **服务器 80 端口已被宝塔/Nginx 占用？** 不用停宝塔，指定一个空闲端口即可：`sudo HTTP_PORT=8080 bash /tmp/qty-boot.sh`（安装后访问 `http://IP:8080`）。安装中途失败也能用同样命令续装，密码和数据库配置会复用，不会重新生成。
+
 > 🔑 **密码输不了数字或特殊字符**：改用环境变量把密码写进命令（单引号包住），例如 `sudo ADMIN_PASSWORD='你的密码' bash /tmp/qty-boot.sh`；或直接交互输入（密码可见）。详见 [`docs/Docker一键部署.md`](docs/Docker一键部署.md)。
 
 > **私有仓库注意**：上面这条纯链接命令要求仓库为**公开**（代码无敏感信息，`install.json`、`.env` 均未入库）。若保持私有，需先到 GitHub 仓库 Settings → General → 最底部 Danger Zone → **Change visibility → Public**，然后再复制执行。
