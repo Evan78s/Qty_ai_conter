@@ -77,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Menu, Bell, Grid, Shop, Document, DataAnalysis, Headset, VideoCamera, MagicStick, Lock, Setting, Connection, Phone, Files } from '@element-plus/icons-vue';
@@ -130,6 +130,10 @@ function canShow(it: any) {
 }
 function go(path: string) { router.push(path); sideOpen.value = false; }
 function onStoreChange() { window.dispatchEvent(new CustomEvent('store-changed', { detail: app.currentStore })); }
+// 门店档案页新增/删除门店后，刷新侧栏与顶栏的门店下拉
+function onStoresChanged() { app.loadMe().catch(() => {}); }
+onMounted(() => window.addEventListener('stores-changed', onStoresChanged));
+onUnmounted(() => window.removeEventListener('stores-changed', onStoresChanged));
 async function onLogout() { await app.logout(); router.push('/login'); }
 
 const showPwd = ref(false);
