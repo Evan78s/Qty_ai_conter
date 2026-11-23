@@ -7,14 +7,14 @@
 #
 # 可选环境变量：
 #   QTY_WEB_ROOT=/www/wwwroot/你的域名   网站根目录（前端文件放这里）
-#   QTY_APP_DIR=/www/wwwroot/qtyai-src   源码与后端运行目录
+#   QTY_APP_DIR=/www/wwwroot/quetaiyiai-src   源码与后端运行目录
 #   QTY_API_PORT=3000                   后端监听端口（本机，不对外暴露）
 set -euo pipefail
 
 REPO="https://github.com/Evan78s/Qty_ai_conter.git"
 BRANCH="master"
-WEB_ROOT="${QTY_WEB_ROOT:-/www/wwwroot/qtyai}"
-APP_DIR="${QTY_APP_DIR:-/www/wwwroot/qtyai-src}"
+WEB_ROOT="${QTY_WEB_ROOT:-/www/wwwroot/quetaiyiai}"
+APP_DIR="${QTY_APP_DIR:-/www/wwwroot/quetaiyiai-src}"
 API_PORT="${QTY_API_PORT:-3000}"
 SERVICE="qty-api"
 
@@ -172,7 +172,7 @@ echo "============================================================"
 echo "  部署完成！接下来在宝塔面板做 3 件事："
 echo "------------------------------------------------------------"
 echo "  1) 数据库 → 添加数据库"
-echo "     库名：yangyuanhui    用户名：qty    密码：自定义（记下来）"
+echo "     库名：quetaiyiai    用户名：quetaiyiai    密码：自定义（记下来）"
 echo "     （字符集选 utf8mb4；不用手动建表，网页向导会建）"
 echo ""
 echo "  2) 网站 → 你的域名 → 设置 → 配置文件"

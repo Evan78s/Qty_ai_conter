@@ -8,9 +8,9 @@ export default defineConfig({
   dbCredentials: {
     host: process.env.DB_HOST || '127.0.0.1',
     port: Number(process.env.DB_PORT || 3306),
-    user: process.env.DB_USER || 'yyh',
+    user: process.env.DB_USER || 'quetaiyiai',
     password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'yangyuanhui',
+    database: process.env.DB_NAME || 'quetaiyiai',
   },
   verbose: true,
   strict: true,

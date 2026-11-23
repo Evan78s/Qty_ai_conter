@@ -38,9 +38,9 @@
         <div class="grid2">
           <label>数据库地址<input v-model="form.host" placeholder="127.0.0.1" /></label>
           <label>端口<input v-model.number="form.port" type="number" placeholder="3306" /></label>
-          <label>用户名<input v-model="form.user" placeholder="yyh" /></label>
+          <label>用户名<input v-model="form.user" placeholder="quetaiyiai" /></label>
           <label>密码<input v-model="form.password" type="password" placeholder="数据库密码" /></label>
-          <label class="full">数据库名<input v-model="form.name" placeholder="yangyuanhui" /></label>
+          <label class="full">数据库名<input v-model="form.name" placeholder="quetaiyiai" /></label>
         </div>
         <label class="check"><input v-model="form.createDatabase" type="checkbox" /> 数据库不存在时自动创建（需账号有 CREATE 权限）</label>
         <div v-if="testResult" class="result" :class="testResult.ok ? 'ok' : 'err'">
@@ -113,7 +113,7 @@ const installMsg = ref('准备中…');
 const result = ref<any>(null);
 
 const form = reactive<any>({
-  host: '127.0.0.1', port: 3306, user: 'yyh', password: '', name: 'yangyuanhui', createDatabase: false,
+  host: '127.0.0.1', port: 3306, user: 'quetaiyiai', password: '', name: 'quetaiyiai', createDatabase: false,
   adminUsername: 'admin', adminName: '总管理员', adminPassword: '', platformName: BRAND.name,
 });
 

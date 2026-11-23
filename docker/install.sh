@@ -94,8 +94,8 @@ if [ -n "${HTTP_PORT:-}" ]; then HTTP_PORT_FROM_ENV=1; fi
 
 if [ "$RESUME" -eq 1 ]; then
   HTTP_PORT="${HTTP_PORT:-${EXIST_HTTP_PORT:-80}}"
-  DB_NAME="${EXIST_DB_NAME:-yangyuanhui}"
-  DB_USER="${EXIST_DB_USER:-qty}"
+  DB_NAME="${EXIST_DB_NAME:-quetaiyiai}"
+  DB_USER="${EXIST_DB_USER:-quetaiyiai}"
   DB_ROOT_PASS="${EXIST_DB_ROOT_PASS:-}"
   DB_PASS="${EXIST_DB_PASS:-}"
   ADMIN_USER="${EXIST_ADMIN_USER:-admin}"
@@ -147,8 +147,8 @@ else
 
   DB_ROOT_PASS="$(openssl rand -hex 20)"
   DB_PASS="$(openssl rand -hex 20)"
-  DB_NAME="yangyuanhui"
-  DB_USER="qty"
+  DB_NAME="quetaiyiai"
+  DB_USER="quetaiyiai"
 fi
 
 # ---------- 端口校验 ----------
