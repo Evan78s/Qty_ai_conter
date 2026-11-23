@@ -148,6 +148,11 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 EOF
+# 若 3000 端口已被占用（常见：之前 Docker 部署残留的容器），先明确提示，避免服务反复重启却查不到原因
+if command -v ss >/dev/null 2>&1 && ss -ltn 2>/dev/null | awk 'NR>1{print $4}' | grep -qE "[:.]$API_PORT\$"; then
+  echo "⚠ 检测到端口 $API_PORT 已被占用（可能是之前 Docker 部署的容器）。若后端启动失败，请先清理："
+  echo "    docker ps -a --filter 'name=qty-' -q | xargs -r docker rm -f"
+fi
 systemctl daemon-reload
 systemctl enable "$SERVICE" >/dev/null 2>&1 || true
 systemctl restart "$SERVICE"
