@@ -46,16 +46,34 @@ if ! need_cmd git; then
 fi
 
 if ! need_cmd node || [ "$(node -v 2>/dev/null | sed 's/^v//' | cut -d. -f1)" -lt 20 ]; then
-  echo "==> 安装 Node.js 22 LTS…"
-  if need_cmd apt-get; then
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-    apt-get install -y -qq nodejs
-  elif need_cmd yum || need_cmd dnf; then
-    curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
-    if need_cmd dnf; then dnf install -y -q nodejs; else yum install -y -q nodejs; fi
-  else
-    echo "✗ 无法自动安装 Node.js，请手动安装 Node 22 后重试"; exit 1
+  echo "==> 安装 Node.js 22 LTS（官方二进制包，兼容 CentOS / Ubuntu / 宝塔）…"
+  # 不用 NodeSource 脚本（它在部分阿里云 CentOS 上会误判系统），直接下载官方预编译包。
+  NODE_VER="v22.14.0"
+  case "$(uname -m)" in
+    x86_64)  NODE_ARCH="x64" ;;
+    aarch64|arm64) NODE_ARCH="arm64" ;;
+    *) echo "✗ 不支持的 CPU 架构：$(uname -m)"; exit 1 ;;
+  esac
+  NODE_TARBALL="node-${NODE_VER}-linux-${NODE_ARCH}.tar.xz"
+  NODE_INSTALLED=0
+  # 优先国内镜像（阿里云服务器快），失败再回退官方源
+  for NODE_BASE in "https://npmmirror.com/mirrors/node" "https://nodejs.org/dist"; do
+    NODE_URL="${NODE_BASE}/${NODE_VER}/${NODE_TARBALL}"
+    echo "    尝试下载：${NODE_URL}"
+    if curl -fsSL --connect-timeout 15 --retry 2 "$NODE_URL" -o "/tmp/${NODE_TARBALL}"; then
+      if tar -xf "/tmp/${NODE_TARBALL}" -C /usr/local --strip-components=1; then
+        NODE_INSTALLED=1
+        rm -f "/tmp/${NODE_TARBALL}"
+        break
+      fi
+    fi
+  done
+  if [ "$NODE_INSTALLED" -ne 1 ]; then
+    echo "✗ Node.js 下载失败。请检查服务器能否访问外网，或手动安装 Node 22 后重试。"
+    exit 1
   fi
+  hash -r 2>/dev/null || true
+  echo "✓ Node.js $(node -v) 安装完成"
 else
   echo "✓ Node.js $(node -v) 已就绪"
 fi
