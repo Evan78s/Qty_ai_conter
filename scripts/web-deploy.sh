@@ -169,8 +169,12 @@ location /api/ {
     client_max_body_size 20m;
 }
 
-# 前端 history 路由回退（宝塔：网站 → 设置 → 伪静态，填入下面一行）
-# try_files \$uri \$uri/ /index.html;
+# 前端 history 路由回退（必须加，否则 /setup 等页面 404）
+# 宝塔「配置」标签：把下面这段 location / 放进 server { } 内（和上面的 /api/ 并列）
+# 或宝塔「URL 重写 / 伪静态」标签：只填 try_files 那一行
+location / {
+    try_files \$uri \$uri/ /index.html;
+}
 EOF
 echo "✓ Nginx 配置片段已生成：$SNIPPET"
 
