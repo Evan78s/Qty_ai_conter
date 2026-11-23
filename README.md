@@ -47,7 +47,9 @@ curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker
 
 **详细步骤见 [`docs/Docker一键部署.md`](docs/Docker一键部署.md)**（含私有仓库令牌、HTTPS、备份、各端安装）。
 
-> 传统手动部署（宝塔 + 原生 MySQL + systemd）仍保留，见 [`docs/部署与运维手册.md`](docs/部署与运维手册.md)。
+> **不用 Docker 也行**：用「网站目录部署」把前端直接发布到网站目录、后端由 systemd 守护，域名和 SSL 交给宝塔。见 [`docs/网站目录部署-宝塔.md`](docs/网站目录部署-宝塔.md)。
+
+> 传统手动部署（原生 MySQL + systemd）仍保留，见 [`docs/部署与运维手册.md`](docs/部署与运维手册.md)。
 
 ### 2. 各端使用（PWA，无需下载 App）
 
