@@ -45,6 +45,10 @@ index.html 高保真原型（单文件，可直接浏览器打开看效果）
 curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/scripts/web-deploy.sh -o /tmp/qty-web-deploy.sh && sudo bash /tmp/qty-web-deploy.sh
 ```
 
+> **已把后端端口改为 3100（例如当初为避开宝塔 upage 占用的 3000）的服务器，重跑时务必带上端口**：
+> `sudo QTY_API_PORT=3100 bash /tmp/qty-web-deploy.sh`
+> 不带这个变量，脚本会把 systemd 服务重置回默认 3000，导致与 upage 冲突、后端起不来。脚本是幂等的：已装过就只拉代码、重建、重启，不会丢数据库和 `api/data/install.json`。
+
 脚本自动完成：**装 Node → 拉源码 → 构建前后端 → 前端放进网站目录 → 启动后端服务（systemd）**。默认网站目录 `/www/wwwroot/quetaiyiai`，可用 `QTY_WEB_ROOT=/你的/目录` 覆盖。
 
 跑完后在宝塔做 3 件事：**建数据库**（库名/用户名 `quetaiyiai`）→ **加 `/api/` 反代和伪静态** → 打开 `https://你的域名/setup` 填数据库信息一键安装。完整步骤见 [`docs/网站目录部署-宝塔.md`](docs/网站目录部署-宝塔.md)。

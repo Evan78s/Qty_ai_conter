@@ -9,6 +9,9 @@
 #   QTY_WEB_ROOT=/www/wwwroot/你的域名   网站根目录（前端文件放这里）
 #   QTY_APP_DIR=/www/wwwroot/quetaiyiai-src   源码与后端运行目录
 #   QTY_API_PORT=3000                   后端监听端口（本机，不对外暴露）
+# 注意：已经在用非默认端口（例如为避开宝塔 upage 占用的 3000 而改用 3100）的服务器，
+# 重新执行时必须显式带 QTY_API_PORT=3100，否则会把 systemd 服务重置回 3000 导致冲突。
+# 本脚本可重复执行：已有源码时自动 git pull → 重建 → 重启，不会删除数据库或 install.json。
 set -euo pipefail
 
 REPO="https://github.com/Evan78s/Qty_ai_conter.git"
