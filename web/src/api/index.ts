@@ -41,6 +41,18 @@ function demoResponse(path: string, method: string): any {
   if (path.includes('/settings/stores')) return DEMO_STORES;
   if (path.includes('/settings/brand')) return isGet ? DEMO_SETTINGS.brand : { ok: true };
   if (path.includes('/settings/database')) return DEMO_SETTINGS.database;
+  if (path.includes('/biz/capabilities/status')) {
+    return { ok: true, capabilities: { feishu: { enabled: true }, ai: { enabled: false }, metaAds: { enabled: false }, googleAds: { enabled: false }, xiaohongshu: { enabled: false } } };
+  }
+  if (path.includes('/users/roles')) return [
+    { id: 'r1', code: 'super_admin', name: '公司总管理员', permissions: { overview: 4, store: 4, reconcile: 4, ads: 4, service: 4, social: 4, system: 4 } },
+    { id: 'r2', code: 'store_manager', name: '分店店长', permissions: { overview: 3, store: 3, reconcile: 3, ads: 1, service: 3, social: 3, system: 0 } },
+    { id: 'r3', code: 'staff', name: '员工', permissions: { overview: 1, store: 1, reconcile: 2, ads: 0, service: 2, social: 2, system: 0 } },
+    { id: 'r4', code: 'auditor', name: '只读审计', permissions: { overview: 1, store: 1, reconcile: 1, ads: 1, service: 1, social: 1, system: 1 } },
+  ];
+  if (path.includes('/users')) return [];
+  if (path.includes('/audit')) return [];
+  if (path.includes('/biz/')) return isGet ? [] : { ok: true, id: 'demo' };
   return { ok: true };
 }
 
@@ -95,4 +107,21 @@ export const api = {
   brand: () => raw('/settings/brand'),
   saveBrand: (body: any) => raw('/settings/brand', { method: 'POST', body: JSON.stringify(body) }),
   dbStatus: () => raw('/settings/database'),
+  // 用户与权限
+  updateUser: (id: string, body: any) => raw(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteUser: (id: string) => raw(`/users/${id}`, { method: 'DELETE' }),
+  updateRole: (code: string, permissions: Record<string, number>) => raw(`/users/roles/${code}`, { method: 'PATCH', body: JSON.stringify({ permissions }) }),
+  // 通用业务数据（各模块真实落库）
+  bizList: (type: string, storeId = 'all') => raw(`/biz/${type}?storeId=${encodeURIComponent(storeId)}`),
+  bizCreate: (type: string, body: any) => raw(`/biz/${type}`, { method: 'POST', body: JSON.stringify(body) }),
+  bizUpdate: (type: string, id: string, body: any) => raw(`/biz/${type}/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  bizDelete: (type: string, id: string) => raw(`/biz/${type}/${id}`, { method: 'DELETE' }),
+  capabilities: () => raw('/biz/capabilities/status'),
+  // AI 配置
+  aiConfig: () => raw('/ai-config'),
+  saveAiGlobal: (body: any) => raw('/ai-config/global', { method: 'POST', body: JSON.stringify(body) }),
+  saveAiPersonal: (body: any) => raw('/ai-config/personal', { method: 'POST', body: JSON.stringify(body) }),
+  updateAiScene: (code: string, body: any) => raw(`/ai-config/scene/${code}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  testAi: (which: 'global' | 'personal') => raw('/ai-config/test', { method: 'POST', body: JSON.stringify({ which }) }),
+  aiChat: (body: { prompt: string; system?: string; scene?: string }) => raw('/ai-config/chat', { method: 'POST', body: JSON.stringify(body) }),
 };

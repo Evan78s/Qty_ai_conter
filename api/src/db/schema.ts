@@ -214,7 +214,29 @@ export const auditLogs = mysqlTable('audit_logs', {
   createdAt: createdAt(),
 }, (t) => ({ byTime: index('idx_audit_time').on(t.createdAt) }));
 
+/**
+ * 通用业务记录表：各功能模块的本地真实数据统一存这里。
+ * biz_type 区分模块（kb / reconcile / price / material / service_reply / service_queue /
+ *   push_config / social_post / social_reply / social_account / ads_account / ads_daily / ...），
+ * payload 存该类型专属字段 JSON；store_id 支持门店隔离（'' = 公司级）。
+ */
+export const bizRecords = mysqlTable('biz_records', {
+  id: id('id'),
+  tenantId: tenantId(),
+  storeId: storeId().notNull().default(''),
+  bizType: varchar('biz_type', { length: 48 }).notNull(),
+  title: varchar('title', { length: 255 }).notNull().default(''),
+  payload: text('payload'),
+  status: varchar('status', { length: 16 }).notNull().default('active'),
+  createdAt: createdAt(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+}, (t) => ({
+  byTypeStore: index('idx_biz_type_store').on(t.bizType, t.storeId),
+  byTenant: index('idx_biz_tenant').on(t.tenantId),
+}));
+
 export const schema = {
   tenants, roles, stores, users, userStores, sessions,
   aiConfigs, aiScenes, integrations, platformSettings, storeFeishuBindings, syncMappings, auditLogs,
+  bizRecords,
 };

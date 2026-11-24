@@ -1,42 +1,104 @@
 <template>
   <div>
-    <div class="page-head"><div><div class="page-title">自媒体 AI 工作台</div><div class="page-desc">小红书优先 · 账号监控 / 内容发布 / 互动回复</div></div><el-button type="primary" @click="$router.push('/material')"><el-icon><Sparkles /></el-icon>创作内容</el-button></div>
+    <div class="page-head"><div><div class="page-title">自媒体 AI 工作台</div><div class="page-desc">小红书优先 · 账号监控 / 内容发布 / 互动回复（数据保存本机）</div></div><el-button type="primary" @click="$router.push('/material')"><el-icon><Sparkles /></el-icon>创作内容</el-button></div>
     <el-tabs v-model="tab">
       <el-tab-pane label="账号监控" name="account">
-        <div class="grid g4" style="margin-top:14px"><div v-for="k in kpis" :key="k.lb" class="card kpi"><div class="top"><span class="lb">{{k.lb}}</span><span class="ic">📱</span></div><div class="val num">{{k.v}}</div><div class="ft"><span class="chip up">{{k.ch}}</span>环比上月</div></div></div>
+        <div class="grid g4" style="margin-top:14px"><div v-for="k in kpis" :key="k.lb" class="card kpi"><div class="top"><span class="lb">{{k.lb}}</span><span class="ic">📱</span></div><div class="val num">{{k.v}}</div><div class="ft"><span class="chip flat">{{k.ch}}</span>当前</div></div></div>
         <div class="grid g2" style="margin-top:16px">
-          <div class="card"><div class="card-h"><h3>小红书账号概览</h3><span class="tag y">模拟数据</span></div><div class="card-b">
-            <div v-for="a in accounts" :key="a[0]" style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line2)"><div style="width:38px;height:38px;border-radius:9px;background:#FF2442;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">小红书</div><div style="flex:1"><div style="font-weight:600">{{a[0]}}</div><div style="font-size:12px;color:var(--ink2)">{{a[2]}}</div></div><div class="num" style="font-weight:700">{{a[1]}}</div></div>
+          <div class="card"><div class="card-h"><h3>账号概览</h3><el-button size="small" @click="openAccount">+ 添加账号</el-button></div><div class="card-b">
+            <div v-for="a in accounts" :key="a.id" style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line2)"><div style="width:38px;height:38px;border-radius:9px;background:#FF2442;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">{{ (a.payload?.platform||'小红书').slice(0,2) }}</div><div style="flex:1"><div style="font-weight:600">{{a.title}}</div><div style="font-size:12px;color:var(--ink2)">{{a.payload?.note||''}}</div></div><div class="num" style="font-weight:700">{{a.payload?.followers||0}}</div><el-button size="small" text type="danger" @click="del('social_account',a)">删</el-button></div>
+            <div v-if="!accounts.length" style="padding:20px;text-align:center;color:var(--ink2)">暂无账号，点「添加账号」录入。</div>
           </div></div>
-          <div class="card"><div class="card-h"><h3>粉丝增长趋势</h3></div><div class="card-b"><div ref="fansEl" class="chart"></div></div></div>
+          <div class="card"><div class="card-h"><h3>发布计划</h3><el-button size="small" @click="openPost">+ 新建计划</el-button></div><div class="card-b" style="padding:0">
+            <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['日期','内容主题','平台','状态']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
+              <tr v-for="p in posts" :key="p.id"><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{p.payload?.date}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{p.title}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><span class="tag r">{{p.payload?.platform}}</span></td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><span class="tag g">{{p.status==='done'?'已发布':'计划中'}}</span></td></tr>
+            </tbody></table>
+            <div v-if="!posts.length" style="padding:20px;text-align:center;color:var(--ink2)">暂无发布计划。</div>
+          </div></div>
         </div>
       </el-tab-pane>
-      <el-tab-pane label="发布计划" name="publish">
-        <div class="card" style="margin-top:14px"><div class="card-h"><h3>内容发布日历 · 11月</h3><el-button size="small" type="primary" @click="$router.push('/material')">新建内容</el-button></div><div class="card-b">
-          <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px"><div v-for="d in ['一','二','三','四','五','六','日']" :key="d" style="text-align:center;font-size:11px;color:var(--ink3);padding:6px">周{{d}}</div>
-            <div v-for="i in 21" :key="i" style="aspect-ratio:1;border:1px solid var(--line);border-radius:8px;padding:6px;font-size:11px" :style="[2,5,9,12,16,19].includes(i)?{background:'var(--green-l)'}:{}"><div style="color:var(--ink2)">{{i}}</div><div v-if="[2,5,9,12,16,19].includes(i)" style="margin-top:4px;font-size:9px;color:var(--green);font-weight:600">肩颈养生</div></div>
-          </div>
-        </div></div>
-      </el-tab-pane>
       <el-tab-pane label="互动回复" name="reply">
-        <div class="card" style="margin-top:14px"><div class="card-h"><h3>评论与私信回复</h3><span class="page-desc">AI 建议回复 + 人工确认</span></div><div class="card-b" style="padding:0">
-          <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['平台/账号','用户','内容','AI 建议回复','操作']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
-            <tr v-for="r in replies" :key="r[1]"><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><span class="tag r">{{r[0]}}</span></td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{r[1]}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{r[2]}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);color:var(--green-d);background:var(--green-l);border-radius:6px">{{r[3]}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><el-button type="primary" size="small" @click="ElMessage.success('回复已发送')">发送</el-button> <el-button size="small" @click="ElMessage.success('已编辑（演示）')">编辑</el-button></td></tr>
+        <div class="card" style="margin-top:14px"><div class="card-h"><h3>评论与私信回复</h3><el-button size="small" @click="openReply">+ 添加互动</el-button></div><div class="card-b" style="padding:0">
+          <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['平台','用户','内容','建议回复','操作']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
+            <tr v-for="r in replies" :key="r.id"><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><span class="tag r">{{r.payload?.platform}}</span></td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{r.payload?.user}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{r.payload?.content}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);color:var(--green-d);background:var(--green-l);border-radius:6px">{{r.payload?.suggested||'—'}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><el-button type="primary" size="small" @click="sendReply(r)">发送</el-button> <el-button size="small" @click="aiSuggest(r)">AI建议</el-button> <el-button size="small" text type="danger" @click="del('social_reply',r)">删</el-button></td></tr>
           </tbody></table>
+          <div v-if="!replies.length" style="padding:20px;text-align:center;color:var(--ink2)">暂无互动，点「添加互动」录入。</div>
         </div></div>
       </el-tab-pane>
     </el-tabs>
-    <div class="mini-note">小红书无企业认证号，官方 API 仅支持登录授权。当前展示模拟数据 + 支持人工录入，预留官方/第三方数据接口，认证后即可切换真实数据。</div>
+
+    <el-dialog v-model="accountDialog" title="添加账号" width="440px"><el-form label-position="top"><el-form-item label="账号名称"><el-input v-model="accountForm.name"/></el-form-item><el-form-item label="平台"><el-select v-model="accountForm.platform" style="width:100%"><el-option label="小红书" value="小红书"/><el-option label="微信公众号" value="公众号"/><el-option label="抖音" value="抖音"/></el-select></el-form-item><el-form-item label="粉丝数"><el-input-number v-model="accountForm.followers" :min="0" style="width:100%"/></el-form-item><el-form-item label="备注"><el-input v-model="accountForm.note"/></el-form-item></el-form><template #footer><el-button @click="accountDialog=false">取消</el-button><el-button type="primary" @click="submitAccount">保存</el-button></template></el-dialog>
+    <el-dialog v-model="postDialog" title="新建发布计划" width="440px"><el-form label-position="top"><el-form-item label="内容主题"><el-input v-model="postForm.title"/></el-form-item><el-form-item label="计划日期"><el-date-picker v-model="postForm.date" type="date" value-format="YYYY-MM-DD" style="width:100%"/></el-form-item><el-form-item label="平台"><el-select v-model="postForm.platform" style="width:100%"><el-option label="小红书" value="小红书"/><el-option label="公众号" value="公众号"/></el-select></el-form-item></el-form><template #footer><el-button @click="postDialog=false">取消</el-button><el-button type="primary" @click="submitPost">保存</el-button></template></el-dialog>
+    <el-dialog v-model="replyDialog" title="添加互动" width="460px"><el-form label-position="top"><el-form-item label="平台"><el-select v-model="replyForm.platform" style="width:100%"><el-option label="小红书" value="小红书"/><el-option label="公众号" value="公众号"/></el-select></el-form-item><el-form-item label="用户"><el-input v-model="replyForm.user"/></el-form-item><el-form-item label="内容"><el-input v-model="replyForm.content" type="textarea" :rows="3"/></el-form-item></el-form><template #footer><el-button @click="replyDialog=false">取消</el-button><el-button type="primary" @click="submitReply">保存</el-button></template></el-dialog>
   </div>
 </template>
 <script setup lang="ts">
-import { ref } from 'vue';
-import { ElMessage } from 'element-plus';
-import { useChart, axis } from '../composables';
-const tab=ref('account');
-const kpis=[{lb:'全平台粉丝',v:'28.6K',ch:'+6.8%'},{lb:'本月净增',v:'+1,842',ch:'+12%'},{lb:'平均互动率',v:'4.7%',ch:'+0.5pp'},{lb:'本月爆款',v:'6 篇',ch:'+2'}];
-const accounts=[['鵲太醫官方号','18.2K 粉丝','本月 12 篇 · 互动率 5.2%'],['肩颈理疗日记','7.4K 粉丝','本月 8 篇 · 互动率 4.1%'],['静安店·小养','3.0K 粉丝','本月 6 篇 · 互动率 3.8%']];
-const replies=[['小红书','小美','这个套餐适合孕妇吗？','孕期建议咨询医生后预约，我们提供温和理疗项目～'],['小红书','阿杰','价格还能优惠吗？','新客首次体验价 ¥168，性价比很高哦'],['公众号','王姐','周末营业吗？','周末正常营业 10:00–22:00，建议提前预约']];
-const fansEl=ref<HTMLElement|null>(null);
-useChart(fansEl,()=>({tooltip:{trigger:'axis'},grid:{left:46,right:16,top:20,bottom:24},xAxis:{type:'category',data:['W1','W2','W3','W4'],...axis},yAxis:{type:'value',...axis},series:[{type:'line',smooth:true,data:[26800,27400,27950,28600],lineStyle:{color:'#FF2442',width:2.5},itemStyle:{color:'#FF2442'},areaStyle:{color:'rgba(255,36,66,.1)'}}]}));
+import { ref, computed, onMounted } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { api } from '../api';
+
+const tab = ref('account');
+const accounts = ref<any[]>([]); const posts = ref<any[]>([]); const replies = ref<any[]>([]);
+const accountDialog = ref(false); const postDialog = ref(false); const replyDialog = ref(false);
+const accountForm = ref<any>({ name: '', platform: '小红书', followers: 0, note: '' });
+const postForm = ref<any>({ title: '', date: '', platform: '小红书' });
+const replyForm = ref<any>({ platform: '小红书', user: '', content: '' });
+
+const totalFollowers = computed(() => accounts.value.reduce((s, a) => s + (Number(a.payload?.followers) || 0), 0));
+const kpis = computed(() => [
+  { lb: '账号数', v: String(accounts.value.length), ch: '个' },
+  { lb: '粉丝总数', v: totalFollowers.value.toLocaleString(), ch: '人' },
+  { lb: '发布计划', v: String(posts.value.length), ch: '条' },
+  { lb: '互动待回', v: String(replies.value.filter((r) => r.status !== 'done').length), ch: '条' },
+]);
+
+async function load() {
+  try {
+    const [a, p, r] = await Promise.all([api.bizList('social_account'), api.bizList('social_post'), api.bizList('social_reply')]);
+    accounts.value = a; posts.value = p; replies.value = r;
+  } catch (e: any) { ElMessage.error(e.message || '加载失败'); }
+}
+onMounted(load);
+
+function openAccount() { accountForm.value = { name: '', platform: '小红书', followers: 0, note: '' }; accountDialog.value = true; }
+async function submitAccount() {
+  if (!accountForm.value.name) return ElMessage.warning('请填写账号名称');
+  try { await api.bizCreate('social_account', { storeId: '', title: accountForm.value.name, payload: { ...accountForm.value } }); accountDialog.value = false; ElMessage.success('账号已添加'); await load(); }
+  catch (e: any) { ElMessage.error(e.message || '保存失败'); }
+}
+function openPost() { postForm.value = { title: '', date: new Date().toISOString().slice(0, 10), platform: '小红书' }; postDialog.value = true; }
+async function submitPost() {
+  if (!postForm.value.title || !postForm.value.date) return ElMessage.warning('请填写主题和日期');
+  try { await api.bizCreate('social_post', { storeId: '', title: postForm.value.title, payload: { ...postForm.value }, status: 'pending' }); postDialog.value = false; ElMessage.success('发布计划已保存'); await load(); }
+  catch (e: any) { ElMessage.error(e.message || '保存失败'); }
+}
+function openReply() { replyForm.value = { platform: '小红书', user: '', content: '' }; replyDialog.value = true; }
+async function submitReply() {
+  if (!replyForm.value.user || !replyForm.value.content) return ElMessage.warning('请填写用户和内容');
+  try { await api.bizCreate('social_reply', { storeId: '', title: replyForm.value.user, payload: { ...replyForm.value } }); replyDialog.value = false; ElMessage.success('互动已添加'); await load(); }
+  catch (e: any) { ElMessage.error(e.message || '保存失败'); }
+}
+async function sendReply(r: any) {
+  try { await api.bizUpdate('social_reply', r.id, { status: 'done' }); ElMessage.success('已标记为已回复'); await load(); }
+  catch (e: any) { ElMessage.error(e.message || '操作失败'); }
+}
+async function aiSuggest(r: any) {
+  try {
+    const data = await api.aiChat({
+      prompt: `用户评论：${r.payload?.content}。请给出一条简短、亲切、专业的中文回复建议（适合养生馆品牌）。`,
+      system: '你是小红书运营，回复要真实自然、不夸大、不违规，50 字以内。',
+      scene: 'social',
+    });
+    await api.bizUpdate('social_reply', r.id, { payload: { ...r.payload, suggested: data.content } });
+    ElMessage.success('AI 建议已生成'); await load();
+  } catch (e: any) {
+    if ((e.message || '').includes('Key')) ElMessage.warning('请先到「AI 模型与密钥」配置 Key');
+    else ElMessage.error(e.message || '生成失败');
+  }
+}
+async function del(type: string, item: any) {
+  try { await ElMessageBox.confirm('确定删除吗？', '删除', { type: 'warning' }); } catch { return; }
+  try { await api.bizDelete(type, item.id); ElMessage.success('已删除'); await load(); }
+  catch (e: any) { ElMessage.error(e.message || '删除失败'); }
+}
 </script>

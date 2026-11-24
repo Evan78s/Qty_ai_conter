@@ -170,6 +170,21 @@ export const DDL: string[] = [
     created_at BIGINT NOT NULL,
     INDEX idx_audit_time (created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  // 通用业务记录表：承载各功能模块的本地真实数据（知识库/对账/价目/素材/客服/投流/自媒体等）。
+  // payload 存该类型专属字段的 JSON；biz_type 区分模块；store_id 支持门店隔离（'' = 公司级）。
+  `CREATE TABLE IF NOT EXISTS biz_records (
+    id VARCHAR(36) PRIMARY KEY,
+    tenant_id VARCHAR(36) NULL,
+    store_id VARCHAR(36) NOT NULL DEFAULT '',
+    biz_type VARCHAR(48) NOT NULL,
+    title VARCHAR(255) NOT NULL DEFAULT '',
+    payload TEXT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'active',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    INDEX idx_biz_type_store (biz_type, store_id),
+    INDEX idx_biz_tenant (tenant_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 ];
 
 /**
