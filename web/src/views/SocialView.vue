@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="page-head"><div><div class="page-title">自媒体 AI 工作台</div><div class="page-desc">小红书优先 · 账号监控 / 内容发布 / 互动回复（数据保存本机）</div></div><el-button type="primary" @click="$router.push('/material')"><el-icon><Sparkles /></el-icon>创作内容</el-button></div>
+    <div class="page-head"><div><div class="page-title">自媒体 AI 工作台</div><div class="page-desc">小红书优先 · 账号监控 / 内容发布 / 互动回复（数据保存本机）</div></div><div style="display:flex;gap:10px"><el-button v-if="app.can('social', 2)" @click="aiChatOpen = true">AI 助手</el-button><el-button type="primary" @click="$router.push('/material')"><el-icon><Sparkles /></el-icon>创作内容</el-button></div></div>
     <el-tabs v-model="tab">
       <el-tab-pane label="账号监控" name="account">
         <div class="grid g4" style="margin-top:14px"><div v-for="k in kpis" :key="k.lb" class="card kpi"><div class="top"><span class="lb">{{k.lb}}</span><span class="ic">📱</span></div><div class="val num">{{k.v}}</div><div class="ft"><span class="chip flat">{{k.ch}}</span>当前</div></div></div>
@@ -30,13 +30,18 @@
     <el-dialog v-model="accountDialog" title="添加账号" width="440px"><el-form label-position="top"><el-form-item label="账号名称"><el-input v-model="accountForm.name"/></el-form-item><el-form-item label="平台"><el-select v-model="accountForm.platform" style="width:100%"><el-option label="小红书" value="小红书"/><el-option label="微信公众号" value="公众号"/><el-option label="抖音" value="抖音"/></el-select></el-form-item><el-form-item label="粉丝数"><el-input-number v-model="accountForm.followers" :min="0" style="width:100%"/></el-form-item><el-form-item label="备注"><el-input v-model="accountForm.note"/></el-form-item></el-form><template #footer><el-button @click="accountDialog=false">取消</el-button><el-button type="primary" @click="submitAccount">保存</el-button></template></el-dialog>
     <el-dialog v-model="postDialog" title="新建发布计划" width="440px"><el-form label-position="top"><el-form-item label="内容主题"><el-input v-model="postForm.title"/></el-form-item><el-form-item label="计划日期"><el-date-picker v-model="postForm.date" type="date" value-format="YYYY-MM-DD" style="width:100%"/></el-form-item><el-form-item label="平台"><el-select v-model="postForm.platform" style="width:100%"><el-option label="小红书" value="小红书"/><el-option label="公众号" value="公众号"/></el-select></el-form-item></el-form><template #footer><el-button @click="postDialog=false">取消</el-button><el-button type="primary" @click="submitPost">保存</el-button></template></el-dialog>
     <el-dialog v-model="replyDialog" title="添加互动" width="460px"><el-form label-position="top"><el-form-item label="平台"><el-select v-model="replyForm.platform" style="width:100%"><el-option label="小红书" value="小红书"/><el-option label="公众号" value="公众号"/></el-select></el-form-item><el-form-item label="用户"><el-input v-model="replyForm.user"/></el-form-item><el-form-item label="内容"><el-input v-model="replyForm.content" type="textarea" :rows="3"/></el-form-item></el-form><template #footer><el-button @click="replyDialog=false">取消</el-button><el-button type="primary" @click="submitReply">保存</el-button></template></el-dialog>
+    <AiChatDialog v-model="aiChatOpen" title="自媒体 AI 助手" system="你是养生馆连锁品牌的自媒体运营助手，擅长小红书/公众号选题、种草笔记撰写与评论回复，输出专业、简洁、可直接使用的中文内容。" placeholder="例如：帮我写一条新店开业的小红书笔记…" />
   </div>
 </template>
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api';
+import AiChatDialog from '../components/AiChatDialog.vue';
+import { useAppStore } from '../stores/app';
 
+const app = useAppStore();
+const aiChatOpen = ref(false);
 const tab = ref('account');
 const accounts = ref<any[]>([]); const posts = ref<any[]>([]); const replies = ref<any[]>([]);
 const accountDialog = ref(false); const postDialog = ref(false); const replyDialog = ref(false);

@@ -149,5 +149,8 @@ export const api = {
   saveAiPersonal: (body: any) => raw('/ai-config/personal', { method: 'POST', body: JSON.stringify(body) }),
   updateAiScene: (code: string, body: any) => raw(`/ai-config/scene/${code}`, { method: 'PATCH', body: JSON.stringify(body) }),
   testAi: (which: 'global' | 'personal') => raw('/ai-config/test', { method: 'POST', body: JSON.stringify({ which }) }),
-  aiChat: (body: { prompt: string; system?: string; scene?: string }) => raw('/ai-config/chat', { method: 'POST', body: JSON.stringify(body) }),
+  aiChat: (body: {
+    prompt?: string; system?: string; scene?: string; preferGlobal?: boolean;
+    messages?: { role: 'user' | 'assistant'; content: string }[];
+  }) => raw('/ai-config/chat', { method: 'POST', body: JSON.stringify(body) }),
 };

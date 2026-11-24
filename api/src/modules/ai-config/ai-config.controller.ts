@@ -95,18 +95,27 @@ export class AiConfigController {
     return { ok: true, code };
   }
 
-  /** 通用文本生成代理：用已保存的 Key 调 OpenAI 兼容 chat 接口（文案/脚本/解读等）。 */
+  /** 通用文本生成代理：用已保存的 Key 调 OpenAI 兼容 chat 接口（文案/脚本/解读/多轮对话）。 */
   @Post('chat')
   @RequirePerm('social', PERM.EDIT)
-  async chat(@Req() req: Request, @Body() body: { prompt: string; system?: string; scene?: string }) {
+  async chat(@Req() req: Request, @Body() body: {
+    prompt?: string; system?: string; scene?: string; preferGlobal?: boolean;
+    messages?: { role: 'user' | 'assistant'; content: string }[];
+  }) {
     const user = (req as any).authUser as AuthUser;
-    if (!body.prompt?.trim()) throw new BadRequestException('提示词不能为空');
+    const history = Array.isArray(body.messages) ? body.messages.slice(-20) : [];
+    const prompt = body.prompt?.trim() || '';
+    if (!prompt && !history.length) throw new BadRequestException('提示词不能为空');
     const all = await db.select().from(schema.aiConfigs);
-    // 优先个人 Key，其次全局
-    const cfg = all.find((c) => c.scope === 'user' && c.scopeId === user.id && c.apiKeyEnc)
-      || all.find((c) => c.scope === 'platform' && c.apiKeyEnc)
-      || all.find((c) => c.isDefault && c.apiKeyEnc);
-    if (!cfg?.apiKeyEnc) throw new BadRequestException('尚未配置 AI Key，请先到「AI 模型与密钥」页配置全局或个人 Key');
+    // 默认优先个人 Key；preferGlobal 用于「必须用系统全局默认模型」的场景（如自媒体 AI 助手）。
+    const cfg = body.preferGlobal
+      ? (all.find((c) => c.scope === 'platform' && c.apiKeyEnc) || all.find((c) => c.isDefault && c.apiKeyEnc))
+      : (all.find((c) => c.scope === 'user' && c.scopeId === user.id && c.apiKeyEnc)
+        || all.find((c) => c.scope === 'platform' && c.apiKeyEnc)
+        || all.find((c) => c.isDefault && c.apiKeyEnc));
+    if (!cfg?.apiKeyEnc) throw new BadRequestException(body.preferGlobal
+      ? '系统尚未配置全局 AI 模型，请先到「AI 模型与密钥」页配置全局 Key'
+      : '尚未配置 AI Key，请先到「AI 模型与密钥」页配置全局或个人 Key');
     let apiKey: string;
     try { apiKey = decrypt(cfg.apiKeyEnc); } catch { throw new BadRequestException('密钥解密失败，请重新保存 Key'); }
     const base = (cfg.baseUrl || 'https://api.deepseek.com').replace(/\/$/, '');
@@ -116,6 +125,13 @@ export class AiConfigController {
       const [scene] = await db.select().from(schema.aiScenes).where(eq(schema.aiScenes.sceneCode, body.scene)).limit(1);
       if (scene?.modelOverride) model = scene.modelOverride;
     }
+    // 多轮对话：传入历史时原样转发（只保留 user/assistant），否则退回单轮 prompt。
+    const messages = history.length
+      ? history
+        .filter((m) => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+        .map((m) => ({ role: m.role, content: m.content.slice(0, 8000) }))
+      : [{ role: 'user' as const, content: prompt }];
+    if (!messages.length) throw new BadRequestException('对话内容不能为空');
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -124,7 +140,7 @@ export class AiConfigController {
           model,
           messages: [
             { role: 'system', content: body.system || '你是养生馆连锁品牌的运营助手，输出专业、简洁、可直接使用的中文内容。' },
-            { role: 'user', content: body.prompt },
+            ...messages,
           ],
         }),
         signal: AbortSignal.timeout(60000),
