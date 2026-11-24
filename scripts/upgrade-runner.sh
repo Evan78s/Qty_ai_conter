@@ -41,9 +41,15 @@ tmp = path + '.tmp'
 with open(tmp, 'w', encoding='utf-8') as f: json.dump(d, f, ensure_ascii=False)
 os.replace(tmp, path)
 PY
+  # 状态文件由 root 脚本写入，但下次是后端进程（www）来写初始状态；
+  # 不把属主改回去，第二次点升级就会 EACCES。
+  chown "$RUN_USER":"$RUN_USER" "$STATUS_FILE" 2>/dev/null || true
 }
 
-log() { echo "[$(date '+%F %T')] $*" >> "$LOG_FILE"; }
+log() {
+  echo "[$(date '+%F %T')] $*" >> "$LOG_FILE"
+  chown "$RUN_USER":"$RUN_USER" "$LOG_FILE" 2>/dev/null || true
+}
 
 # 并发保护：flock -n 拿不到锁就直接退出（前端会看到已在升级中）
 exec 9>"$LOCK_FILE"
@@ -56,6 +62,8 @@ fi
 log "===== 开始升级 ====="
 write_status running "准备中" "正在检查更新…"
 cd "$APP_DIR" || { write_status error "准备" "源码目录不存在：$APP_DIR" false; exit 1; }
+# 升级脚本以 root 运行，而源码目录属主是 www；高版本 Git 会因 dubious ownership 拒绝 pull。
+git config --global --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
 
 # 1. 拉取最新代码
 log "git pull --ff-only"

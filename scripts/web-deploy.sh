@@ -93,6 +93,8 @@ echo "✓ 运行用户：$RUN_USER"
 # ---------- 2. 拉取源码 ----------
 if [ -d "$APP_DIR/.git" ]; then
   echo "==> 检测到已有源码，正在更新…"
+  # 脚本以 root 运行，源码目录通常属主是 www；高版本 Git 会因 dubious ownership 拒绝 pull。
+  git config --global --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
   git -C "$APP_DIR" pull --ff-only
 else
   if [ -e "$APP_DIR" ] && [ -n "$(ls -A "$APP_DIR" 2>/dev/null)" ]; then
