@@ -95,6 +95,7 @@ export const DDL: string[] = [
     config_id VARCHAR(36) NULL,
     model_override VARCHAR(64) NOT NULL DEFAULT '',
     temperature VARCHAR(16) NOT NULL DEFAULT '0.3',
+    system_prompt TEXT NULL,
     enabled TINYINT(1) NOT NULL DEFAULT 1,
     created_at BIGINT NOT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
@@ -205,6 +206,8 @@ const COLUMN_UPGRADES: ColumnUpgrade[] = [
   // 存量索引补齐（老库可能缺）
   { table: 'sessions', column: 'tenant_id', ddl: "ALTER TABLE sessions ADD COLUMN tenant_id VARCHAR(36) NULL AFTER id" },
   { table: 'audit_logs', column: 'tenant_id', ddl: "ALTER TABLE audit_logs ADD COLUMN tenant_id VARCHAR(36) NULL AFTER id" },
+  // Agent Skill：管理员统一配置的场景提示词
+  { table: 'ai_scenes', column: 'system_prompt', ddl: 'ALTER TABLE ai_scenes ADD COLUMN system_prompt TEXT NULL AFTER temperature' },
 ];
 
 const INDEX_UPGRADES: IndexUpgrade[] = [

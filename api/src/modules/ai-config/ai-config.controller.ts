@@ -33,9 +33,10 @@ export class AiConfigController {
       ok: true,
       global: mask(global),
       personal: mask(personal),
-      scenes: scenes.map((s) => ({
+      scenes: scenes.map((s: any) => ({
         code: s.sceneCode, name: s.name, model: s.modelOverride,
         temperature: s.temperature, enabled: s.enabled,
+        systemPrompt: s.systemPrompt || '',
       })),
       canEditGlobal: user.isSuper,
     };
@@ -82,7 +83,7 @@ export class AiConfigController {
   /** 更新场景绑定。 */
   @Patch('scene/:code')
   @RequirePerm('system', PERM.EDIT)
-  async updateScene(@Req() req: Request, @Param('code') code: string, @Body() body: { model?: string; temperature?: string; enabled?: boolean }) {
+  async updateScene(@Req() req: Request, @Param('code') code: string, @Body() body: { model?: string; temperature?: string; enabled?: boolean; systemPrompt?: string }) {
     const user = (req as any).authUser as AuthUser;
     const [scene] = await db.select().from(schema.aiScenes).where(eq(schema.aiScenes.sceneCode, code)).limit(1);
     if (!scene) throw new BadRequestException('场景不存在');
@@ -90,6 +91,7 @@ export class AiConfigController {
       modelOverride: body.model ?? scene.modelOverride,
       temperature: body.temperature ?? scene.temperature,
       enabled: body.enabled ?? scene.enabled,
+      systemPrompt: body.systemPrompt ?? (scene as any).systemPrompt ?? '',
     }).where(eq(schema.aiScenes.sceneCode, code));
     await this.audit.log('更新 AI 场景绑定', 'system', { userId: user.id, ip: req.ip });
     return { ok: true, code };

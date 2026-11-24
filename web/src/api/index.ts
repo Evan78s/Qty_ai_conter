@@ -62,20 +62,46 @@ function demoResponse(path: string, method: string): any {
  * 后到的那次会拿到已吊销的 token，导致整个会话家族被注销、被踢回登录页。
  * 因此这里做单飞（single-flight）：同一时刻只允许一个刷新请求。
  */
+const REFRESH_FALLBACK_KEY = 'qty_refresh_fallback';
+function saveRefreshToken(t?: string | null) {
+  try {
+    if (t) localStorage.setItem(REFRESH_FALLBACK_KEY, t);
+    else localStorage.removeItem(REFRESH_FALLBACK_KEY);
+  } catch { /* 隐私模式下忽略 */ }
+}
+function loadRefreshToken(): string {
+  try { return localStorage.getItem(REFRESH_FALLBACK_KEY) || ''; } catch { return ''; }
+}
+
 let refreshing: Promise<string | null> | null = null;
 export function refreshAccess(): Promise<string | null> {
   if (refreshing) return refreshing;
   refreshing = (async () => {
-    try {
-      const r = await fetch('/api/auth/refresh', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }, body: '{}',
-      });
+    const apply = async (r: Response): Promise<string | null> => {
       if (!r.ok) return null;
-      const data = await r.json();
+      const data = await r.json().catch(() => ({}));
       if (!data?.accessToken) return null;
       setAccessToken(data.accessToken);
+      if (data.refreshToken) saveRefreshToken(data.refreshToken);
       return data.accessToken as string;
+    };
+    // 优先用 localStorage 里的最新 token（多标签更可靠），失败再走 HttpOnly Cookie。
+    const local = loadRefreshToken();
+    if (local) {
+      try {
+        const t = await apply(await fetch('/api/auth/refresh', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: local }),
+        }));
+        if (t) return t;
+      } catch { /* ignore */ }
+    }
+    try {
+      return await apply(await fetch('/api/auth/refresh', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }, body: '{}',
+      }));
     } catch {
       return null;
     } finally {
@@ -110,10 +136,22 @@ export const api = {
   post: (p: string, body?: any) => raw(p, { method: 'POST', body: JSON.stringify(body || {}) }),
   patch: (p: string, body?: any) => raw(p, { method: 'PATCH', body: JSON.stringify(body || {}) }),
   del: (p: string) => raw(p, { method: 'DELETE' }),
-  login: (username: string, password: string) => raw('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
-  logout: () => raw('/auth/logout', { method: 'POST', body: '{}' }),
+  login: async (username: string, password: string) => {
+    const data = await raw('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+    if (data?.refreshToken) saveRefreshToken(data.refreshToken);
+    return data;
+  },
+  logout: async () => {
+    try { return await raw('/auth/logout', { method: 'POST', body: '{}' }); }
+    finally { saveRefreshToken(null); }
+  },
   me: () => raw('/auth/me'),
-  changePassword: (oldPassword: string, newPassword: string) => raw('/auth/change-password', { method: 'POST', body: JSON.stringify({ oldPassword, newPassword }) }),
+  changePassword: async (oldPassword: string, newPassword: string) => {
+    // 改密会吊销全部会话，本地兜底 token 必须一起清掉，否则刷新时会用失效 token 触发家族注销。
+    const data = await raw('/auth/change-password', { method: 'POST', body: JSON.stringify({ oldPassword, newPassword }) });
+    saveRefreshToken(null);
+    return data;
+  },
   // 安装向导（公开）
   setupStatus: () => raw('/setup/status'),
   testDb: (body: any) => raw('/setup/test-db', { method: 'POST', body: JSON.stringify(body) }),
@@ -147,10 +185,15 @@ export const api = {
   aiConfig: () => raw('/ai-config'),
   saveAiGlobal: (body: any) => raw('/ai-config/global', { method: 'POST', body: JSON.stringify(body) }),
   saveAiPersonal: (body: any) => raw('/ai-config/personal', { method: 'POST', body: JSON.stringify(body) }),
-  updateAiScene: (code: string, body: any) => raw(`/ai-config/scene/${code}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  updateAiScene: (code: string, body: { model?: string; temperature?: string; enabled?: boolean; systemPrompt?: string }) => raw(`/ai-config/scene/${code}`, { method: 'PATCH', body: JSON.stringify(body) }),
   testAi: (which: 'global' | 'personal') => raw('/ai-config/test', { method: 'POST', body: JSON.stringify({ which }) }),
   aiChat: (body: {
     prompt?: string; system?: string; scene?: string; preferGlobal?: boolean;
     messages?: { role: 'user' | 'assistant'; content: string }[];
   }) => raw('/ai-config/chat', { method: 'POST', body: JSON.stringify(body) }),
+  // 每日对账：飞书「门店每日台账」+ Agent 核对
+  reconcileTables: (storeId = 'all') => raw(`/reconcile/tables?storeId=${encodeURIComponent(storeId)}`),
+  reconcileRemote: (storeId = 'all') => raw(`/reconcile/remote?storeId=${encodeURIComponent(storeId)}`),
+  reconcileAgent: (body: { storeId?: string; messages?: { role: 'user' | 'assistant'; content: string }[]; text?: string }) => raw('/reconcile/agent', { method: 'POST', body: JSON.stringify(body) }),
+  reconcileSync: (body: any) => raw('/reconcile/sync', { method: 'POST', body: JSON.stringify(body) }),
 };

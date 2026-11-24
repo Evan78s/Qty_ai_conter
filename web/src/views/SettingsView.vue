@@ -154,11 +154,17 @@
     <!-- 门店绑定弹窗 -->
     <el-dialog v-model="bindDialog" :title="bindForm.id ? '编辑门店绑定' : '绑定门店表格'" width="560px">
       <el-form label-position="top">
-        <el-form-item label="门店"><el-select v-model="bindForm.storeId" style="width:100%" :disabled="!!bindForm.id"><el-option v-for="s in storeList" :key="s.id" :label="s.name" :value="s.id" /></el-select></el-form-item>
+        <el-form-item label="门店"><el-select v-model="bindForm.storeId" style="width:100%" :disabled="!!bindForm.id" @change="loadLedgerTables"><el-option v-for="s in storeList" :key="s.id" :label="s.name" :value="s.id" /></el-select></el-form-item>
         <el-form-item label="多维表格 app_token"><el-input v-model="bindForm.appToken" placeholder="bascnxxx" /></el-form-item>
         <el-form-item label="表格链接（可选，便于跳转）"><el-input v-model="bindForm.baseUrl" placeholder="https://xxx.feishu.cn/base/..." /></el-form-item>
         <el-form-item label="使用凭证"><el-select v-model="bindForm.credentialId" style="width:100%" clearable placeholder="公司默认"><el-option v-for="c in credentials" :key="c.id" :label="c.appId" :value="c.id" /></el-select></el-form-item>
-        <el-divider content-position="left">子表 table_id</el-divider>
+        <el-form-item label="对账子表（门店每日台账）">
+          <el-select v-model="bindForm.tableIds.ledger" style="width:100%" clearable filterable :loading="loadingLedger" @focus="loadLedgerTables" placeholder="默认自动匹配「门店每日台账」">
+            <el-option v-for="t in ledgerTables" :key="t.tableId" :label="t.name" :value="t.tableId" />
+          </el-select>
+          <div class="mini-note">留空时系统自动匹配名为「门店每日台账」的子表；每日对账的读取与写回都走这里。</div>
+        </el-form-item>
+        <el-divider content-position="left">其它子表 table_id</el-divider>
         <div class="grid2">
           <el-form-item v-for="k in tableKeys" :key="k" :label="tableLabel(k)"><el-input v-model="bindForm.tableIds[k]" size="small" placeholder="tblxxx" /></el-form-item>
         </div>
@@ -228,10 +234,24 @@ async function delCred(row: any) {
 /* 绑定 */
 const bindDialog = ref(false);
 const bindForm = reactive<any>({ id: '', storeId: '', appToken: '', baseUrl: '', credentialId: '', tableIds: {} });
+const ledgerTables = ref<{ tableId: string; name: string }[]>([]);
+const loadingLedger = ref(false);
+async function loadLedgerTables() {
+  if (!bindForm.storeId || loadingLedger.value) return;
+  loadingLedger.value = true;
+  try {
+    const data = await api.reconcileTables(bindForm.storeId);
+    ledgerTables.value = data.tables || [];
+    if (!bindForm.tableIds.ledger && data.suggestedId) bindForm.tableIds.ledger = data.suggestedId;
+  } catch { ledgerTables.value = []; }
+  finally { loadingLedger.value = false; }
+}
 function openBinding(row?: any) {
   if (row) Object.assign(bindForm, { id: row.id, storeId: row.storeId, appToken: row.appToken, baseUrl: row.baseUrl, credentialId: row.credentialId, tableIds: { ...row.tableIds } });
   else Object.assign(bindForm, { id: '', storeId: '', appToken: '', baseUrl: '', credentialId: '', tableIds: {} });
+  ledgerTables.value = [];
   bindDialog.value = true;
+  if (bindForm.storeId) loadLedgerTables();
 }
 async function saveBinding() {
   saving.value = true;

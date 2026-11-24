@@ -118,6 +118,8 @@ export const aiScenes = mysqlTable('ai_scenes', {
   configId: varchar('config_id', { length: 36 }),
   modelOverride: varchar('model_override', { length: 64 }).notNull().default(''),
   temperature: varchar('temperature', { length: 16 }).notNull().default('0.3'),
+  /** 管理员统一配置的 Agent Skill 系统提示词（留空用内置默认）。 */
+  systemPrompt: text('system_prompt'),
   enabled: boolean('enabled').notNull().default(true),
   createdAt: createdAt(),
 });

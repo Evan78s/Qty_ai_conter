@@ -60,10 +60,9 @@ export class AuthService {
     const [session] = await db.select().from(schema.sessions).where(eq(schema.sessions.refreshHash, hash)).limit(1);
     if (!session) throw new UnauthorizedException('刷新凭证无效');
     if (session.revokedAt) {
-      // 重用已吊销 token：吊销整个家族
-      await db.update(schema.sessions).set({ revokedAt: Date.now() })
-        .where(eq(schema.sessions.familyId, session.familyId));
-      throw new UnauthorizedException('检测到异常，已注销该设备登录');
+      // 旧 token 只是失效，不再连带吊销整个家族：
+      // 多标签 / Cookie 与本地兜底并存时，偶尔用到旧 token 不应把其它正常设备一起踢下线。
+      throw new UnauthorizedException('刷新凭证已失效，请重新登录');
     }
     if (session.expiresAt < Date.now()) throw new UnauthorizedException('登录已过期，请重新登录');
 
