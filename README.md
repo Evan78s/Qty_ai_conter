@@ -97,12 +97,15 @@ VITE_DEMO=true npm run dev
 
 **网站目录部署：**
 ```bash
-cd /www/wwwroot/quetaiyiai-src && git pull && bash scripts/web-deploy.sh
+curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/scripts/web-deploy.sh -o /tmp/qty-web-deploy.sh && sudo QTY_API_PORT=3100 bash /tmp/qty-web-deploy.sh
 ```
+（端口按你实际的填；脚本会自动 `git pull`，无需手动执行。这条也会顺带安装后台一键升级组件。）
 
 **Docker 部署：**
 ```bash
 cd /www/docker/qtyai && git pull && docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
 ```
 
-数据卷 / 数据库 / `install.json` 都保留，数据不丢。后台一键升级（系统设置里点按钮）将在后续版本提供。
+数据卷 / 数据库 / `install.json` 都保留，数据不丢。
+
+**后台一键升级（推荐，网站目录版）：** 总管理员登录后台 → **系统设置 → 系统升级**，点「一键升级」即可，进度实时可见，不用登录服务器。首次使用需先重跑一次网站目录部署脚本以安装升级组件，详见 [`docs/后台一键升级.md`](docs/后台一键升级.md)。Docker 版暂不支持后台按钮升级，用上面的命令行。

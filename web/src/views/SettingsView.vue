@@ -95,6 +95,50 @@
           </div>
         </div>
       </el-tab-pane>
+
+      <!-- 系统升级 -->
+      <el-tab-pane label="系统升级" name="upgrade">
+        <div class="panel narrow">
+          <h3>在线升级</h3>
+          <p class="hint">从 GitHub 拉取最新版本并自动重建、重启，数据不会丢失。升级期间服务会短暂中断约 1 分钟，请在空闲时操作。</p>
+
+          <div v-if="!upgradeInfo?.upgradeAvailable" class="help-box" style="border-color:#e6a23c">
+            <b>当前部署方式不支持在线升级</b>
+            <p>在线升级需要在首次部署时安装升级组件。请在服务器执行升级命令（见文档），或重新运行部署脚本安装升级组件后即可在此一键升级。</p>
+          </div>
+
+          <template v-else>
+            <div class="upgrade-grid">
+              <div><span>当前版本</span><b>{{ upgradeInfo?.version || '—' }}</b></div>
+              <div><span>本地提交</span><b>{{ upgradeInfo?.commit || '—' }}</b></div>
+              <div><span>远程最新</span><b>{{ upgradeInfo?.remoteCommit || '检测失败' }}</b></div>
+              <div><span>组件状态</span><b :class="upgradeInfo?.hasUpdate ? 'warn' : 'ok'">{{ upgradeInfo?.hasUpdate ? '● 有新版本' : (upgradeInfo?.hasUpdate === false ? '● 已是最新' : '—') }}</b></div>
+            </div>
+
+            <div v-if="upgradeInfo && upgradeInfo.state !== 'idle'" class="upgrade-progress" :class="upgradeInfo.state">
+              <p><b>{{ upgradeInfo.state === 'running' ? '升级进行中' : (upgradeInfo.state === 'success' ? '升级完成' : '升级失败') }}</b> · {{ upgradeInfo.stage }} · {{ upgradeInfo.message }}</p>
+              <el-progress v-if="upgradeInfo.state === 'running'" :percentage="upgradeStagePercent(upgradeInfo.stage)" :stroke-width="8" />
+            </div>
+
+            <div style="display:flex;gap:8px;margin:16px 0;flex-wrap:wrap">
+              <el-button size="small" :loading="upgrading" @click="refreshUpgrade">刷新状态</el-button>
+              <el-button size="small" @click="openUpgradeLog">查看日志</el-button>
+              <el-button v-if="app.isSuper" type="primary" size="small" :disabled="upgradeInfo?.state === 'running'" :loading="upgrading" @click="doUpgrade">
+                {{ upgradeInfo?.hasUpdate ? '一键升级到最新版' : '重新拉取并升级' }}
+              </el-button>
+            </div>
+
+            <div v-if="upgradeInfo?.state === 'success'" class="help-box" style="border-color:#67c23a">
+              <b>升级成功</b>
+              <p>请按 Ctrl+F5 强制刷新浏览器以加载新版前端。若页面异常，请先清浏览器缓存。</p>
+            </div>
+            <div v-if="upgradeInfo?.state === 'error'" class="help-box" style="border-color:#f56c6c">
+              <b>升级未完成</b>
+              <p>{{ upgradeInfo.message }}。点「查看日志」了解详情，或按文档用命令行升级。</p>
+            </div>
+          </template>
+        </div>
+      </el-tab-pane>
     </el-tabs>
 
     <!-- 飞书凭证弹窗 -->
@@ -121,12 +165,20 @@
       </el-form>
       <template #footer><el-button @click="bindDialog = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveBinding">保存绑定</el-button></template>
     </el-dialog>
+
+    <!-- 升级日志弹窗 -->
+    <el-dialog v-model="logDialog" title="升级日志" width="720px">
+      <pre class="upgrade-log">{{ upgradeLog }}</pre>
+      <template #footer><el-button @click="logDialog = false">关闭</el-button><el-button size="small" @click="loadUpgradeLog">刷新</el-button></template>
+    </el-dialog>
   </div>
 </template>
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, onUnmounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { api } from '../api';
+import { useAppStore } from '../stores/app';
+const app = useAppStore();
 
 const tab = ref('feishu');
 const loading = ref(false);
@@ -201,4 +253,72 @@ async function saveBrand() {
   catch (e: any) { ElMessage.error(e.message || '保存失败'); }
   finally { saving.value = false; }
 }
+
+/* 系统升级 */
+const upgradeInfo = ref<any>(null);
+const upgrading = ref(false);
+const logDialog = ref(false);
+const upgradeLog = ref('');
+let upgradeTimer: any = null;
+const stageMap: Record<string, number> = { '准备': 5, '启动': 8, '拉取代码': 20, '构建前端': 45, '构建后端': 70, '发布前端': 88, '重启服务': 96, '完成': 100 };
+function upgradeStagePercent(stage: string) { return stageMap[stage] || (stage ? 50 : 10); }
+
+async function refreshUpgrade(silent = false) {
+  try { upgradeInfo.value = await api.upgradeStatus(); }
+  catch (e: any) { if (!silent) ElMessage.error(e.message || '状态获取失败'); }
+}
+
+async function doUpgrade() {
+  await ElMessageBox.confirm(
+    '将从 GitHub 拉取最新版本并重建系统，期间服务中断约 1 分钟、数据不会丢失。确定继续？',
+    '一键升级', { type: 'warning', confirmButtonText: '开始升级', cancelButtonText: '取消' },
+  );
+  upgrading.value = true;
+  try {
+    await api.upgradeTrigger();
+    ElMessage.success('升级已启动，正在跟踪进度…');
+    upgradeInfo.value = { ...(upgradeInfo.value || {}), state: 'running', stage: '启动', message: '升级任务已启动…' };
+    startPolling();
+  } catch (e: any) { ElMessage.error(e.message || '无法启动升级'); }
+  finally { upgrading.value = false; }
+}
+
+function startPolling() {
+  stopPolling();
+  upgradeTimer = setInterval(async () => {
+    try {
+      const s = await api.upgradeStatus();
+      upgradeInfo.value = s;
+      if (s.state === 'success') {
+        stopPolling();
+        ElMessage.success('升级完成，请按 Ctrl+F5 刷新页面');
+      } else if (s.state === 'error') {
+        stopPolling();
+        ElMessage.error('升级失败，请查看日志');
+      }
+    } catch { /* 升级时服务会短暂中断，忽略轮询失败，下轮继续 */ }
+  }, 3000);
+}
+function stopPolling() { if (upgradeTimer) { clearInterval(upgradeTimer); upgradeTimer = null; } }
+
+async function openUpgradeLog() { await loadUpgradeLog(); logDialog.value = true; }
+async function loadUpgradeLog() {
+  try { upgradeLog.value = (await api.upgradeLog()).log || ''; }
+  catch (e: any) { upgradeLog.value = '日志获取失败：' + (e.message || ''); }
+}
+
+// 进入页面时加载状态；若后台正在升级则自动续上轮询
+onMounted(async () => { await refreshUpgrade(true); if (upgradeInfo.value?.state === 'running') startPolling(); });
+onUnmounted(stopPolling);
 </script>
+<style scoped>
+.upgrade-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 18px}
+.upgrade-grid>div{background:var(--panel2,#F7F9F7);border:1px solid var(--line2,#e8ece9);border-radius:10px;padding:11px 13px;display:flex;flex-direction:column;gap:4px}
+.upgrade-grid span{font-size:12px;color:var(--ink2,#6B7B74)}
+.upgrade-grid b{font-size:14px;color:var(--ink,#1F2A26)}
+.upgrade-grid b.ok{color:#1D9E75}.upgrade-grid b.warn{color:#c98a1e}
+.upgrade-progress{padding:12px 14px;border-radius:10px;background:#F4F9F7;border:1px solid #cfe6dc;margin-bottom:6px}
+.upgrade-progress p{margin:0 0 10px;font-size:13px;color:var(--ink,#1F2A26)}
+.upgrade-progress.error{background:#FDF3F0;border-color:#f0c4b8}
+.upgrade-log{background:#1F2A26;color:#D6E4DE;padding:14px;border-radius:8px;font-size:12px;line-height:1.6;max-height:440px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:0}
+</style>

@@ -120,8 +120,14 @@ echo "✓ 前端已发布到 $WEB_ROOT"
 
 # ---------- 5. 后端数据目录与权限 ----------
 mkdir -p "$APP_DIR/api/data"
-chown -R "$RUN_USER:$RUN_GROUP" "$APP_DIR/api/data"
-chown -R "$RUN_USER:$RUN_GROUP" "$WEB_ROOT"
+chown -R "$RUN_USER:$RUN_GROUP" "$APP_DIR/api/data" || true
+# 宝塔会在网站目录生成 .user.ini 并加不可变属性（chattr +i），对其 chown 必然报
+# "Operation not permitted"。脚本开头有 set -e，若不吞掉这个错误会在此中断，
+# 导致后面的 systemd 配置/后端重启全部不执行 —— 表现为前端已更新但后端仍是旧代码（接口 404）。
+if ! chown -R "$RUN_USER:$RUN_GROUP" "$WEB_ROOT" 2>/dev/null; then
+  find "$WEB_ROOT" -name .user.ini -prune -o -exec chown -h "$RUN_USER:$RUN_GROUP" {} + 2>/dev/null || true
+  echo "    已跳过宝塔保护文件 .user.ini（属主调整失败不影响运行）"
+fi
 chmod 750 "$APP_DIR/api/data"
 
 # ---------- 6. systemd 服务 ----------
@@ -157,6 +163,42 @@ systemctl daemon-reload
 systemctl enable "$SERVICE" >/dev/null 2>&1 || true
 systemctl restart "$SERVICE"
 echo "✓ 后端服务已启动：$SERVICE"
+
+# ---------- 6.5 后台一键升级：安装执行器 + 配置 sudo 白名单 ----------
+# 后端以 www（或 qty）运行，无权 git pull / 重启服务，故用 sudo 白名单只允许运行它专属的升级脚本。
+# 该脚本路径写死、不接受任何参数，www 用户对它只有执行权、无写权，无法借此提权执行任意命令。
+echo "==> 配置后台一键升级…"
+if ! need_cmd sudo; then
+  echo "    安装 sudo…"
+  if need_cmd apt-get; then apt-get install -y -qq sudo; else yum install -y -q sudo; fi
+fi
+UPGRADE_BIN="/usr/local/bin/qty-upgrade"
+cp "$APP_DIR/scripts/upgrade-runner.sh" "$UPGRADE_BIN"
+chown root:root "$UPGRADE_BIN"
+chmod 750 "$UPGRADE_BIN"
+# 真实目录/端口写入 root 专属配置，升级脚本自行读取（不依赖 sudo 环境变量传递）
+UPGRADE_ENV="/etc/qty-upgrade.env"
+cat > "$UPGRADE_ENV" <<EOF
+QTY_APP_DIR=$APP_DIR
+QTY_WEB_ROOT=$WEB_ROOT
+QTY_API_PORT=$API_PORT
+QTY_SERVICE=$SERVICE
+QTY_RUN_USER=$RUN_USER
+EOF
+chown root:root "$UPGRADE_ENV"; chmod 600 "$UPGRADE_ENV"
+SUDOERS_FILE="/etc/sudoers.d/qty-upgrade"
+cat > "$SUDOERS_FILE" <<EOF
+# 鵲太醫 AI 运营工作台后台升级：仅允许 $RUN_USER 免密执行固定升级脚本（不接受任何参数）
+$RUN_USER ALL=(root) NOPASSWD: $UPGRADE_BIN
+EOF
+chown root:root "$SUDOERS_FILE"; chmod 440 "$SUDOERS_FILE"
+# 校验语法，避免 sudoers 写错导致 sudo 整体不可用
+if command -v visudo >/dev/null 2>&1 && ! visudo -cf "$SUDOERS_FILE" >/dev/null 2>&1; then
+  echo "⚠ sudoers 配置校验未通过，已移除以免阻断 sudo；后台升级将不可用，请手动升级"
+  rm -f "$SUDOERS_FILE"
+else
+  echo "✓ 后台一键升级已就绪（$UPGRADE_BIN）"
+fi
 
 # ---------- 7. 生成 Nginx 配置片段 ----------
 SNIPPET="$APP_DIR/nginx-snippet.conf"

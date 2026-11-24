@@ -12,6 +12,7 @@ import { SetupModule } from './modules/setup/setup.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { BizModule } from './modules/biz/biz.module';
 import { AiConfigModule } from './modules/ai-config/ai-config.module';
+import { UpgradeModule } from './modules/upgrade/upgrade.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { StoreScopeGuard } from './common/guards/store-scope.guard';
@@ -24,7 +25,7 @@ import './db/index'; // 初始化数据库连接池（未安装时用占位配�
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    SetupModule, SettingsModule, AuthModule, StoresModule, UsersModule, HealthModule, AuditModule, BizModule, AiConfigModule,
+    SetupModule, SettingsModule, AuthModule, StoresModule, UsersModule, HealthModule, AuditModule, BizModule, AiConfigModule, UpgradeModule,
   ],
 })
 class AppModule {}

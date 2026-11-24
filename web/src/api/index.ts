@@ -107,6 +107,10 @@ export const api = {
   brand: () => raw('/settings/brand'),
   saveBrand: (body: any) => raw('/settings/brand', { method: 'POST', body: JSON.stringify(body) }),
   dbStatus: () => raw('/settings/database'),
+  // 系统升级（仅超管可触发）
+  upgradeStatus: () => raw('/upgrade/status'),
+  upgradeLog: () => raw('/upgrade/log'),
+  upgradeTrigger: () => raw('/upgrade/trigger', { method: 'POST', body: '{}' }),
   // 用户与权限
   updateUser: (id: string, body: any) => raw(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteUser: (id: string) => raw(`/users/${id}`, { method: 'DELETE' }),
