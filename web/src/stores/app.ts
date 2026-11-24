@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { api, setAccessToken } from '../api';
+import { api, setAccessToken, refreshAccess } from '../api';
 
 export interface User {
   id: string; username: string; displayName: string; roleCode: string; roleName?: string;
@@ -37,14 +37,11 @@ export const useAppStore = defineStore('app', () => {
   async function init() {
     // 本地演示模式：不连后端，显示登录页即可（任意账号密码可进入）
     if ((import.meta.env as any).VITE_DEMO === 'true') { ready.value = false; return; }
-    // 页面刷新后 access 丢失，尝试用 refresh 恢复
+    // 页面刷新后内存里的 access 丢失，用 HttpOnly Cookie 恢复。
+    // 与 raw() 共用单飞刷新，避免并发刷新互相吊销会话。
     try {
-      const r = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      if (r.ok) {
-        const data = await r.json();
-        setAccessToken(data.accessToken);
-        await loadMe();
-      }
+      const token = await refreshAccess();
+      if (token) await loadMe();
     } catch { /* ignore */ }
   }
   async function logout() {

@@ -21,7 +21,7 @@ export class AuthController {
   @HttpCode(200)
   async login(@Body() body: { username: string; password: string }, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.login(body.username, body.password, ctx(res.req));
-    this.setRefreshCookie(res, result.refreshToken);
+    this.setRefreshCookie(res.req, res, result.refreshToken);
     return result;
   }
 
@@ -30,7 +30,7 @@ export class AuthController {
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const token = req.cookies?.[COOKIE_REFRESH] || (req.body as any)?.refreshToken;
     const result = await this.auth.refresh(token, ctx(req));
-    this.setRefreshCookie(res, result.refreshToken);
+    this.setRefreshCookie(req, res, result.refreshToken);
     return result;
   }
 
@@ -56,11 +56,18 @@ export class AuthController {
     return this.auth.me((req as any).authUser);
   }
 
-  private setRefreshCookie(res: Response, token: string) {
+  private setRefreshCookie(req: Request, res: Response, token: string) {
     const prod = process.env.NODE_ENV === 'production';
+    // 反向代理下 req.protocol 恒为 http，必须以 X-Forwarded-Proto 为准（部署脚本的 Nginx 片段已设置该头）。
+    // 关键：若站点用 HTTP 访问却给 Cookie 加 Secure，浏览器会直接丢弃它，
+    // 表现为登录成功但每次刷新页面都要重新登录。
+    const forwarded = req.headers['x-forwarded-proto'];
+    const proto = (Array.isArray(forwarded) ? forwarded[0] : forwarded || '')
+      .split(',')[0].trim().toLowerCase();
+    const isHttps = proto === 'https' || req.secure;
     res.cookie(COOKIE_REFRESH, token, {
       httpOnly: true,
-      secure: prod,
+      secure: prod && isHttps,
       sameSite: 'lax',
       path: '/api/auth',
       maxAge: REFRESH_TTL_MS,

@@ -56,6 +56,35 @@ function demoResponse(path: string, method: string): any {
   return { ok: true };
 }
 
+/**
+ * 刷新 access token。后端 refresh 采用「轮转」：旧 refresh 用一次即吊销。
+ * 页面刷新时可能有多个请求同时收到 401，若各自调一次 /auth/refresh，
+ * 后到的那次会拿到已吊销的 token，导致整个会话家族被注销、被踢回登录页。
+ * 因此这里做单飞（single-flight）：同一时刻只允许一个刷新请求。
+ */
+let refreshing: Promise<string | null> | null = null;
+export function refreshAccess(): Promise<string | null> {
+  if (refreshing) return refreshing;
+  refreshing = (async () => {
+    try {
+      const r = await fetch('/api/auth/refresh', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      if (!r.ok) return null;
+      const data = await r.json();
+      if (!data?.accessToken) return null;
+      setAccessToken(data.accessToken);
+      return data.accessToken as string;
+    } catch {
+      return null;
+    } finally {
+      refreshing = null;
+    }
+  })();
+  return refreshing;
+}
+
 async function raw(path: string, options: RequestInit = {}, retry = true): Promise<any> {
   const method = (options.method || 'GET').toUpperCase();
   if (DEMO) {
@@ -66,15 +95,8 @@ async function raw(path: string, options: RequestInit = {}, retry = true): Promi
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   const res = await fetch(`/api${path}`, { ...options, headers, credentials: 'include' });
   if (res.status === 401 && retry && !path.includes('/auth/')) {
-    // 尝试刷新
-    try {
-      const r = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      if (r.ok) {
-        const data = await r.json();
-        setAccessToken(data.accessToken);
-        return raw(path, options, false);
-      }
-    } catch { /* ignore */ }
+    const token = await refreshAccess();
+    if (token) return raw(path, options, false);
     setAccessToken(null);
     throw new Error('登录已过期');
   }
