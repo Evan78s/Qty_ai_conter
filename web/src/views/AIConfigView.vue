@@ -21,10 +21,10 @@
         <tr v-for="s in scenes" :key="s.code"><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600">{{s.name}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><el-input v-model="s.model" size="small" placeholder="留空用全局" style="width:180px" :disabled="!canEditGlobal" /></td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><el-input v-model="s.temperature" size="small" style="width:80px" :disabled="!canEditGlobal" /></td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><el-switch v-model="s.enabled" :disabled="!canEditGlobal" /></td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><el-button size="small" text :disabled="!canEditGlobal" @click="saveScene(s)">保存</el-button></td></tr>
       </tbody></table>
     </div></div>
-    <div class="card" style="margin-top:16px"><div class="card-h"><h3>Agent Skill 提示词</h3><span class="page-desc">管理员统一配置 · 对账对话窗口调用「对账核对」场景</span></div><div class="card-b">
+    <div class="card" style="margin-top:16px"><div class="card-h"><h3>Agent Skill 提示词</h3><span class="page-desc">无需安装插件 · 在这里配置全公司统一使用的 Skill（对账为主，兼作 AI 助理）</span></div><div class="card-b">
       <el-select v-model="skillScene" style="width:220px;margin-bottom:10px"><el-option v-for="s in scenes" :key="s.code" :label="s.name" :value="s.code" /></el-select>
-      <el-input v-model="skillPrompt" type="textarea" :rows="6" placeholder="留空则使用系统内置默认提示词" :disabled="!canEditGlobal" />
-      <div style="display:flex;gap:8px;margin-top:10px"><el-button size="small" type="primary" :disabled="!canEditGlobal" @click="saveSkill">保存提示词</el-button><span class="mini-note" style="margin:0;align-self:center">提示词决定 Agent 如何解析上传/粘贴内容并输出可写回多维表格的字段。</span></div>
+      <el-input v-model="skillPrompt" type="textarea" :rows="8" placeholder="留空则使用系统内置默认提示词" :disabled="!canEditGlobal" />
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><el-button size="small" type="primary" :disabled="!canEditGlobal" @click="saveSkill">保存提示词</el-button><el-button size="small" :disabled="!canEditGlobal" @click="applyDefaultSkill">套用默认 Skill 模板</el-button><span class="mini-note" style="margin:0;align-self:center">点「套用默认 Skill 模板」会自动填入「对账核对 + AI 运营助理」双能力提示词，再点保存即可生效；留空则运行内置默认。</span></div>
     </div></div>
     <div class="card" style="margin-top:16px"><div class="card-h"><h3>个人自带密钥</h3><span class="tag y">优先级高于全局</span></div><div class="card-b"><el-form label-position="top"><el-form-item label="我的 API Key（留空则使用全局配置）"><el-input v-model="personal.apiKey" type="password" :placeholder="personal.hasKey ? ('已配置 '+personal.apiKeyMasked+'，留空保持') : 'sk-...'" show-password /></el-form-item></el-form><div style="display:flex;gap:8px"><el-button size="small" @click="savePersonal">保存个人 Key</el-button><el-button size="small" :loading="testingPersonal" @click="test('personal')">测试连接</el-button></div><div class="mini-note">密钥优先级：个人自带 Key &gt; 全局默认 Key。留空保存会清空个人 Key。</div></div></div>
   </div>
@@ -56,6 +56,16 @@ async function saveSkill() {
   if (!s) return;
   try { await api.updateAiScene(s.code, { systemPrompt: s.systemPrompt || '' }); ElMessage.success(`${s.name} 提示词已保存`); }
   catch (e: any) { ElMessage.error(e.message || '保存失败'); }
+}
+
+/** 一键套用官方 Skill 模板：填入默认提示词（对账 + AI 助理），仍需点保存生效。 */
+async function applyDefaultSkill() {
+  try {
+    const data = await api.defaultSkill(skillScene.value);
+    if (!data?.systemPrompt) { ElMessage.warning('该场景暂无 Skill 模板，请手动填写提示词'); return; }
+    skillPrompt.value = data.systemPrompt;
+    ElMessage.success('已填入默认模板，确认内容后点「保存提示词」生效');
+  } catch (e: any) { ElMessage.error(e.message || '加载默认模板失败'); }
 }
 
 async function load() {

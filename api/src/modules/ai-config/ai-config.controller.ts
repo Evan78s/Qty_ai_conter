@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Param, Body, Req, UseGuards, BadRequestException,
+  Controller, Get, Post, Patch, Param, Body, Query, Req, UseGuards, BadRequestException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { eq } from 'drizzle-orm';
@@ -11,6 +11,7 @@ import { RequirePerm } from '../../common/decorators/require-perm.decorator';
 import { AuditService } from '../../common/audit.service';
 import { newId } from '../../db/schema';
 import { encrypt, decrypt, maskSecret } from '../../common/crypto';
+import { getDefaultSkill } from '../../common/skill-presets';
 
 /** AI 模型与密钥：全局配置 + 场景绑定，Key 加密存储，测试连接走后端代理不暴露 Key。 */
 @Controller('api/ai-config')
@@ -78,6 +79,13 @@ export class AiConfigController {
     else await db.insert(schema.aiConfigs).values({ id: newId('aic'), tenantId: user.tenantId || '', scope: 'user', scopeId: user.id, ...patch, createdAt: Date.now() });
     await this.audit.log('保存个人 AI Key', 'system', { userId: user.id, ip: req.ip });
     return { ok: true };
+  }
+
+  /** 获取管理员可一键套用的 Skill 默认提示词（对账 Agent = 对账 + AI 助理双能力）。 */
+  @Get('default-skill')
+  async defaultSkill(@Query('scene') scene?: string) {
+    const code = scene || 'reconcile';
+    return { ok: true, scene: code, systemPrompt: getDefaultSkill(code) };
   }
 
   /** 更新场景绑定。 */

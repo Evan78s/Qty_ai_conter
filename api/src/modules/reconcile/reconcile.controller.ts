@@ -12,12 +12,9 @@ import { FeishuService } from '../../common/feishu.service';
 import { decrypt } from '../../common/crypto';
 import { newId } from '../../db/schema';
 import { AuditService } from '../../common/audit.service';
+import { getDefaultSkill } from '../../common/skill-presets';
 
-const DEFAULT_SKILL = `你是「门店每日台账」核对助手。请阅读用户粘贴的对账文本或上传截图中的文字描述，提取门店每日经营字段。
-要求：
-1. 只使用用户提供的信息，不要编造数字；缺失字段写“未提供”。
-2. 用中文简要说明核对结论，并指出异常项。
-3. 在回答末尾输出一个 JSON 代码块，键名尽量使用：日期、门店、总营业额、耗卡、充值、核对结果、备注。`;
+const DEFAULT_SKILL = getDefaultSkill('reconcile');
 
 /** 对账：读取/写入飞书「门店每日台账」，并提供调用管理员配置 Skill 的 Agent 对话。 */
 @Controller('api/reconcile')

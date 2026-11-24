@@ -186,6 +186,7 @@ export const api = {
   saveAiGlobal: (body: any) => raw('/ai-config/global', { method: 'POST', body: JSON.stringify(body) }),
   saveAiPersonal: (body: any) => raw('/ai-config/personal', { method: 'POST', body: JSON.stringify(body) }),
   updateAiScene: (code: string, body: { model?: string; temperature?: string; enabled?: boolean; systemPrompt?: string }) => raw(`/ai-config/scene/${code}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  defaultSkill: (scene = 'reconcile') => raw(`/ai-config/default-skill?scene=${encodeURIComponent(scene)}`),
   testAi: (which: 'global' | 'personal') => raw('/ai-config/test', { method: 'POST', body: JSON.stringify({ which }) }),
   aiChat: (body: {
     prompt?: string; system?: string; scene?: string; preferGlobal?: boolean;

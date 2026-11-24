@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="page-head">
-      <div><div class="page-title">每日对账录入</div><div class="page-desc">Agent 核对 · 读写飞书「门店每日台账」· 本地 MySQL 同步留痕</div></div>
+      <div><div class="page-title">每日对账录入</div><div class="page-desc">对账为主 · 兼作 AI 助理 · 读写飞书「门店每日台账」· 本地 MySQL 同步留痕</div></div>
       <div style="display:flex;gap:10px;align-items:center">
         <span class="tag g">当前门店：{{ storeName }}</span>
         <el-button :loading="loadingRemote" @click="loadRemote">读取台账</el-button>
@@ -10,15 +10,18 @@
 
     <div class="grid g2">
       <!-- Agent 对话窗口 -->
-      <div class="card"><div class="card-h"><h3>对账 Agent</h3><span class="page-desc">调用管理员配置的 Skill 处理上传/粘贴内容</span></div><div class="card-b" style="padding:0">
+      <div class="card"><div class="card-h"><h3>对账 Agent · AI 助理</h3><span class="page-desc">对账识别台账字段，也能回答运营问题 · 使用管理员配置的 Skill</span></div><div class="card-b" style="padding:0">
         <div ref="chatBody" class="agent-body">
           <div v-if="!messages.length" class="agent-empty">
             <div class="empty-icon">✦</div>
-            <div class="empty-title">把对账单交给 Agent</div>
-            <div class="empty-desc">粘贴收银系统文本，或上传文本文件；图片请先补充图中金额文字。</div>
-            <div class="quick-list">
-              <button v-for="q in quickPrompts" :key="q" class="quick" @click="input = q">{{ q }}</button>
-            </div>
+            <div class="empty-title">把对账单或问题交给 Agent</div>
+            <div class="empty-desc">粘贴收银系统文本可识别台账字段；也可以直接问经营分析、文案、话术等问题。图片请先补充图中金额文字。</div>
+            <div class="quick-group"><span>对账</span><div class="quick-list">
+              <button v-for="q in reconcilePrompts" :key="q" class="quick" @click="input = q">{{ q }}</button>
+            </div></div>
+            <div class="quick-group"><span>AI 助理</span><div class="quick-list">
+              <button v-for="q in assistantPrompts" :key="q" class="quick" @click="input = q">{{ q }}</button>
+            </div></div>
           </div>
           <div v-for="(m, i) in messages" :key="i" class="msg" :class="m.role">
             <div class="avatar">{{ m.role === 'user' ? '我' : 'AI' }}</div>
@@ -33,7 +36,7 @@
           <div v-if="sending" class="msg assistant"><div class="avatar">AI</div><div class="bubble"><div class="typing">正在核对…</div></div></div>
         </div>
         <div class="agent-input">
-          <el-input v-model="input" type="textarea" :rows="3" resize="none" :disabled="sending" placeholder="粘贴对账文本，或输入问题…（Enter 发送，Shift+Enter 换行）" @keydown.enter.exact.prevent="sendAgent" />
+          <el-input v-model="input" type="textarea" :rows="3" resize="none" :disabled="sending" placeholder="粘贴对账文本识别台账字段，或直接问运营问题…（Enter 发送，Shift+Enter 换行）" @keydown.enter.exact.prevent="sendAgent" />
           <div class="agent-actions">
             <input ref="fileInput" type="file" accept=".txt,.csv,.md,text/plain,image/*" style="display:none" @change="onFile" />
             <el-button size="small" :disabled="sending" @click="fileInput?.click()">上传文本/截图</el-button>
@@ -59,7 +62,7 @@
           <div class="field-chips"><span v-for="(v, k) in lastFields" :key="k" class="chip flat">{{ k }}：{{ v }}</span></div>
           <el-button type="primary" style="margin-top:12px" @click="saveReconcile">确认并写入台账</el-button>
         </div>
-        <div v-else class="hint-box">在左侧把对账单发给 Agent，识别后可一键写入飞书台账和本地记录。</div>
+        <div v-else class="hint-box">在左侧把对账单发给 Agent，识别后可一键写入飞书台账和本地记录；普通 AI 助理问答不会写入台账。</div>
       </div></div>
     </div>
 
@@ -104,7 +107,10 @@ const remoteRecords = ref<any[]>([]);
 const tableId = ref('');
 const remoteError = ref('');
 const loadingRemote = ref(false);
-const quickPrompts = ['总营业额 18620，耗卡 6340，充值 9800，请核对', '请帮我检查这段对账文本有没有异常', '把识别结果整理成台账字段'];
+const reconcilePrompts = ['总营业额 18620，耗卡 6340，充值 9800，请核对', '请帮我检查这段对账文本有没有异常', '把识别结果整理成台账字段'];
+const assistantPrompts = ['帮我分析本周营业额下滑的可能原因', '写一条门店新客体验活动文案', '顾客投诉排队太久，帮我拟一段回复话术'];
+/** 只有包含台账字段的 JSON 才视为「可写回台账」，避免 AI 助理的普通回答被误识别。 */
+const LEDGER_KEYS = ['日期', '门店', '总营业额', '营业额', '耗卡', '充值', '核对结果', '备注', 'date', 'store', 'revenue'];
 
 function scrollChat() { nextTick(() => { if (chatBody.value) chatBody.value.scrollTop = chatBody.value.scrollHeight; }); }
 
@@ -116,7 +122,9 @@ function extractFields(content: string): Record<string, any> | null {
   if (!raw) return null;
   try {
     const obj = JSON.parse(raw);
-    return obj && typeof obj === 'object' && !Array.isArray(obj) ? obj : null;
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+    const keys = Object.keys(obj);
+    return keys.some((k) => LEDGER_KEYS.includes(k)) ? obj : null;
   } catch { return null; }
 }
 
@@ -223,7 +231,9 @@ async function saveReconcile() {
 .empty-icon { font-size: 34px; color: var(--green-d); }
 .empty-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-top: 8px; }
 .empty-desc { font-size: 12px; margin-top: 4px; }
-.quick-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 18px; }
+.quick-group { margin-top: 14px; }
+.quick-group > span { display: inline-block; font-size: 11px; color: var(--ink2); border: 1px solid var(--line2); border-radius: 10px; padding: 2px 8px; margin-bottom: 6px; }
+.quick-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
 .quick { border: 1px solid var(--line2); background: transparent; color: var(--ink2); border-radius: 18px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
 .quick:hover { border-color: var(--green-d); color: var(--green-d); }
 .msg { display: flex; gap: 10px; margin: 12px 0; align-items: flex-start; }
