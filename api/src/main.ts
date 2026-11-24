@@ -12,6 +12,7 @@ import { SetupModule } from './modules/setup/setup.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { BizModule } from './modules/biz/biz.module';
 import { AiConfigModule } from './modules/ai-config/ai-config.module';
+import { AuthGuard } from './common/guards/auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { StoreScopeGuard } from './common/guards/store-scope.guard';
 import { InstallGuard } from './common/guards/install.guard';
@@ -43,8 +44,12 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());
   const reflector = app.get(Reflector);
-  // 安装守卫在最前：未安装只放行安装向导
-  app.useGlobalGuards(new InstallGuard(), new RolesGuard(reflector), new StoreScopeGuard());
+  // 守卫顺序至关重要：
+  // 1) InstallGuard — 未安装只放行安装向导
+  // 2) AuthGuard    — 必须先注入 req.authUser（公开路由在守卫内部放行）
+  // 3) RolesGuard   — 依赖 authUser.isSuper / permissions 做权限校验
+  // 4) StoreScopeGuard — 依赖 authUser.visibleStoreIds 做门店隔离
+  app.useGlobalGuards(new InstallGuard(), new AuthGuard(), new RolesGuard(reflector), new StoreScopeGuard());
 
   if (process.env.NODE_ENV !== 'production') {
     app.enableCors({ origin: ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://localhost:5175'], credentials: true });

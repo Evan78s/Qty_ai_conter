@@ -15,7 +15,9 @@ export class StoreScopeGuard implements CanActivate {
     if (!user) return true;
     if (user.visibleStoreIds[0] === '*') return true;
     const storeId = (req.query as any)?.storeId || (req.params as any)?.storeId || (req.body as any)?.storeId;
-    if (storeId && !user.visibleStoreIds.includes(String(storeId))) {
+    // 'all' 是前端「全部门店」的默认选项：不在可见集合里，但语义是「按可见范围查」，
+    // 由各 controller / scopedRepo 内部按 visibleStoreIds 过滤，这里不拦截。
+    if (storeId && String(storeId) !== 'all' && !user.visibleStoreIds.includes(String(storeId))) {
       throw new ForbiddenException('无权访问该门店数据');
     }
     return true;

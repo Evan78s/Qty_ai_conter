@@ -12,6 +12,15 @@ const secret = () => new TextEncoder().encode(getSecret('jwtSecret'));
 export class AuthGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<Request>();
+    // 本守卫注册为全局守卫，且必须排在 RolesGuard / StoreScopeGuard 之前注入 authUser。
+    // 因此这里要自行放行公开路由，否则会把登录、安装向导、健康检查一并拦截。
+    const rawUrl = (req as any).url || (req as any).path || '';
+    const path = rawUrl.split('?')[0];
+    if (
+      path === '/api/setup' || path.startsWith('/api/setup/') ||
+      path === '/api/health' || path.startsWith('/api/health/') ||
+      path === '/api/auth/login' || path === '/api/auth/refresh' || path === '/api/auth/logout'
+    ) return true;
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
     if (!token) throw new UnauthorizedException('未登录');
