@@ -192,6 +192,12 @@ export const api = {
     prompt?: string; system?: string; scene?: string; preferGlobal?: boolean;
     messages?: { role: 'user' | 'assistant'; content: string }[];
   }) => raw('/ai-config/chat', { method: 'POST', body: JSON.stringify(body) }),
+  // Meta 投流：Graph API 同步 + CSV 导入
+  metaConfig: () => raw('/meta/config'),
+  saveMetaConfig: (body: any) => raw('/meta/config', { method: 'POST', body: JSON.stringify(body) }),
+  metaTest: () => raw('/meta/test', { method: 'POST', body: '{}' }),
+  metaSync: (body: { since?: string; until?: string } = {}) => raw('/meta/sync', { method: 'POST', body: JSON.stringify(body) }),
+  metaImportCsv: (body: { csv: string; exchangeRate?: number }) => raw('/meta/import', { method: 'POST', body: JSON.stringify(body) }),
   // 每日对账：飞书「门店每日台账」+ Agent 核对
   reconcileTables: (storeId = 'all') => raw(`/reconcile/tables?storeId=${encodeURIComponent(storeId)}`),
   reconcileRemote: (storeId = 'all') => raw(`/reconcile/remote?storeId=${encodeURIComponent(storeId)}`),

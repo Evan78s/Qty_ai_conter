@@ -2,7 +2,7 @@
   <div>
     <div class="page-head">
       <div><div class="page-title">境外推广看板</div><div class="page-desc">Meta 与 Google Ads 投流数据 · 录入真实数据后自动统计</div></div>
-      <div style="display:flex;gap:10px"><el-radio-group v-model="platform"><el-radio-button value="meta">Meta</el-radio-button><el-radio-button value="google">Google Ads</el-radio-button></el-radio-group><el-button @click="entryDialog=true">+ 录入数据</el-button><el-button type="primary" @click="runAi"><el-icon><Sparkles /></el-icon>AI 分析</el-button></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><el-radio-group v-model="platform"><el-radio-button value="meta">Meta</el-radio-button><el-radio-button value="google">Google Ads</el-radio-button></el-radio-group><template v-if="platform==='meta'"><el-button :loading="syncing" @click="syncMeta">从 Meta 同步</el-button><el-button @click="csvDialog=true">导入 CSV</el-button></template><el-button @click="entryDialog=true">+ 录入数据</el-button><el-button type="primary" @click="runAi"><el-icon><Sparkles /></el-icon>AI 分析</el-button></div>
     </div>
     <div class="grid g4">
       <div v-for="k in kpis" :key="k.lb" class="card kpi"><div class="top"><span class="lb">{{ k.lb }}</span><span class="ic">{{ k.ic }}</span></div><div class="val num">{{ k.v }}</div><div class="ft"><span class="chip flat">{{ k.ft }}</span></div></div>
@@ -23,7 +23,14 @@
       </div></div>
       <div class="card"><div class="card-h"><h3>转化漏斗</h3></div><div class="card-b"><div ref="funnelEl" class="chart"></div></div></div>
     </div>
-    <div class="mini-note">数据来自手动录入或后续官方 API 同步；AI 分析需先在「AI 模型与密钥」配置 Key。写飞书需先在「系统设置」完成飞书授权。</div>
+    <div class="mini-note">Meta 数据来自官方 Graph API 同步或 CSV 导入（按汇率换算成人民币）；Google Ads 暂为手动录入。AI 分析需先在「AI 模型与密钥」配置 Key。</div>
+
+    <el-dialog v-model="csvDialog" title="导入 Meta 广告 CSV" width="560px">
+      <div class="mini-note" style="margin-bottom:10px">在 Ads Manager 导出报表（CSV），或直接从 Excel 复制表格内容粘贴进来。系统按日期聚合，重复日期会覆盖。</div>
+      <el-upload accept=".csv,.txt,text/csv" :show-file-list="false" :before-upload="onCsvFile"><el-button size="small">选择 CSV 文件</el-button></el-upload>
+      <el-input v-model="csvText" type="textarea" :rows="10" placeholder="粘贴 CSV 内容，第一行为表头（需含日期与花费列）" style="margin-top:10px" />
+      <template #footer><el-button @click="csvDialog=false">取消</el-button><el-button type="primary" :loading="csvImporting" :disabled="!csvText.trim()" @click="importCsv">导入</el-button></template>
+    </el-dialog>
 
     <el-dialog v-model="entryDialog" title="录入投流数据" width="480px"><el-form label-position="top">
       <el-form-item label="日期"><el-date-picker v-model="entry.date" type="date" value-format="YYYY-MM-DD" style="width:100%"/></el-form-item>
@@ -51,6 +58,7 @@ import { useChart, axis } from '../composables';
 
 const platform = ref('meta'); const aiOpen = ref(false); const aiLoading = ref(false); const aiResult = ref('');
 const allRows = ref<any[]>([]); const entryDialog = ref(false);
+const syncing = ref(false); const csvDialog = ref(false); const csvText = ref(''); const csvImporting = ref(false);
 const entry = ref<any>({ date: new Date().toISOString().slice(0, 10), spend: 0, imp: 0, clicks: 0, conv: 0, countries: '' });
 const trendEl = ref<HTMLElement | null>(null); const funnelEl = ref<HTMLElement | null>(null);
 
@@ -127,6 +135,33 @@ async function load() {
 }
 onMounted(load);
 watch(platform, () => nextTick(renderCharts));
+
+async function syncMeta() {
+  syncing.value = true;
+  try {
+    const res = await api.metaSync({});
+    ElMessage.success(`已同步 ${res.added + res.updated} 天数据（新增 ${res.added}，更新 ${res.updated}）`);
+    await load();
+  } catch (e: any) {
+    const msg = e?.message || '同步失败';
+    if (String(msg).includes('Token') || String(msg).includes('配置')) ElMessage.warning('请先到「系统设置 → Meta 投流」配置 Token 与广告账户');
+    else ElMessage.error(msg);
+  } finally { syncing.value = false; }
+}
+async function onCsvFile(file: File) {
+  csvText.value = await file.text();
+  return false;
+}
+async function importCsv() {
+  csvImporting.value = true;
+  try {
+    const res = await api.metaImportCsv({ csv: csvText.value });
+    ElMessage.success(`已导入 ${res.added + res.updated} 天数据`);
+    csvDialog.value = false; csvText.value = '';
+    await load();
+  } catch (e: any) { ElMessage.error(e.message || '导入失败'); }
+  finally { csvImporting.value = false; }
+}
 
 async function submitEntry() {
   if (!entry.value.date) return ElMessage.warning('请选择日期');

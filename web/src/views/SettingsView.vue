@@ -96,6 +96,44 @@
         </div>
       </el-tab-pane>
 
+      <!-- Meta 投流 -->
+      <el-tab-pane label="Meta 投流" name="meta">
+        <div class="panel">
+          <h3>Meta 广告数据对接</h3>
+          <p class="hint">配一次长期 Token，境外推广看板即可自动拉取 Meta 广告数据；不配也可用 CSV 导入。</p>
+          <el-form label-position="top" style="max-width:620px">
+            <el-form-item label="Access Token（长期令牌）">
+              <el-input v-model="metaForm.accessToken" type="password" show-password :placeholder="metaInfo?.accessTokenMasked ? ('已配置 ' + metaInfo.accessTokenMasked + '，留空保持') : 'EAAxxxx…'" />
+            </el-form-item>
+            <div class="grid g2">
+              <el-form-item label="广告账户 ID（URL 里 act= 后的数字）"><el-input v-model="metaForm.accountId" placeholder="2041926046723925" /></el-form-item>
+              <el-form-item label="商务管理 ID（URL 里 business_id=）"><el-input v-model="metaForm.businessId" placeholder="944158525162622" /></el-form-item>
+            </div>
+            <div class="grid g2">
+              <el-form-item label="美元→人民币汇率"><el-input-number v-model="metaForm.exchangeRate" :min="0.01" :step="0.01" :precision="4" style="width:100%" /></el-form-item>
+              <el-form-item label="转化事件（可选，留空自动识别）"><el-input v-model="metaForm.conversionAction" placeholder="purchase / lead / …" /></el-form-item>
+            </div>
+          </el-form>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <el-button type="primary" :loading="metaSaving" @click="saveMeta">保存配置</el-button>
+            <el-button :loading="metaTesting" :disabled="!metaInfo?.configured" @click="testMeta">测试连接</el-button>
+            <el-tag v-if="metaInfo?.configured" type="success" size="small">已配置</el-tag>
+            <el-tag v-else type="warning" size="small">未配置</el-tag>
+          </div>
+          <div v-if="metaTestResult" class="help-box">连接正常：{{ metaTestResult.name }} · 币种 {{ metaTestResult.currency }} · 状态 {{ metaTestResult.accountStatus }}</div>
+          <div class="help-box">
+            <b>怎么拿到这三项</b>
+            <ol>
+              <li>打开 <code>business.facebook.com</code> → 商务设置 → 应用，创建或选一个应用。</li>
+              <li>在系统用户里生成令牌，权限勾选 <code>ads_read</code>，复制长期 Access Token。</li>
+              <li>把广告账户（ID 见上方 URL 的 <code>act=</code>）授权给该系统用户，权限 <code>查看/读取</code>。</li>
+              <li>回到本页填入 Token、广告账户 ID、商务 ID，点保存，再点测试连接。</li>
+            </ol>
+            <p>Token 加密存在服务器，不会下发到浏览器；汇率用于把美元花费换算成看板显示的人民币。</p>
+          </div>
+        </div>
+      </el-tab-pane>
+
       <!-- 系统升级 -->
       <el-tab-pane label="系统升级" name="upgrade">
         <div class="panel narrow">
@@ -194,6 +232,9 @@ const bindings = ref<any[]>([]);
 const storeList = ref<any[]>([]);
 const brandForm = reactive<any>({ platformName: '', logoUrl: '', logoText: '', subtitle: '' });
 const dbInfo = ref<any>(null);
+const metaForm = reactive<any>({ accessToken: '', accountId: '', businessId: '', exchangeRate: 7.2, conversionAction: '' });
+const metaInfo = ref<any>(null);
+const metaSaving = ref(false); const metaTesting = ref(false); const metaTestResult = ref<any>(null);
 
 const tableKeys = ['performance', 'dsp', 'kb', 'replies', 'queue', 'social', 'materials', 'push'];
 const tableLabel = (k: string) => ({ performance: '每日业绩', dsp: '投流洞察', kb: '客服知识库', replies: 'AI回复', queue: '待人工接待', social: '自媒体', materials: '素材', push: '推送配置' } as any)[k] || k;
@@ -201,16 +242,41 @@ const tableLabel = (k: string) => ({ performance: '每日业绩', dsp: '投流�
 async function load() {
   loading.value = true;
   try {
-    const [c, b, s, br, d] = await Promise.all([
-      api.feishuCredentials(), api.bindings(), api.settingStores(), api.brand(), api.dbStatus(),
+    const [c, b, s, br, d, m] = await Promise.all([
+      api.feishuCredentials(), api.bindings(), api.settingStores(), api.brand(), api.dbStatus(), api.metaConfig(),
     ]);
     credentials.value = c; bindings.value = b; storeList.value = s;
     Object.assign(brandForm, br);
     dbInfo.value = d;
+    metaInfo.value = m;
+    Object.assign(metaForm, {
+      accountId: m?.accountId || '', businessId: m?.businessId || '',
+      exchangeRate: m?.exchangeRate || 7.2, conversionAction: m?.conversionAction || '',
+    });
   } catch (e: any) { ElMessage.error(e.message || '加载失败'); }
   finally { loading.value = false; }
 }
 onMounted(load);
+
+/* Meta 投流配置 */
+async function saveMeta() {
+  metaSaving.value = true;
+  try {
+    metaInfo.value = await api.saveMetaConfig({ ...metaForm });
+    metaForm.accessToken = '';
+    metaTestResult.value = null;
+    ElMessage.success('Meta 配置已保存');
+  } catch (e: any) { ElMessage.error(e.message || '保存失败'); }
+  finally { metaSaving.value = false; }
+}
+async function testMeta() {
+  metaTesting.value = true;
+  try {
+    metaTestResult.value = await api.metaTest();
+    ElMessage.success('Meta 连接正常');
+  } catch (e: any) { metaTestResult.value = null; ElMessage.error(e.message || '连接失败'); }
+  finally { metaTesting.value = false; }
+}
 
 /* 凭证 */
 const credDialog = ref(false);
