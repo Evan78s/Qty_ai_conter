@@ -62,7 +62,11 @@ const syncing = ref(false); const csvDialog = ref(false); const csvText = ref(''
 const entry = ref<any>({ date: new Date().toISOString().slice(0, 10), spend: 0, imp: 0, clicks: 0, conv: 0, countries: '' });
 const trendEl = ref<HTMLElement | null>(null); const funnelEl = ref<HTMLElement | null>(null);
 
-const rows = computed(() => allRows.value.filter((r) => (r.payload?.platform || 'meta') === platform.value).sort((a, b) => String(a.payload?.date).localeCompare(String(b.payload?.date))));
+const rows = computed(() => allRows.value
+  .filter((r) => (r.payload?.platform || 'meta') === platform.value)
+  // 过滤掉字段缺失的空脏记录，避免明细表显示 undefined
+  .filter((r) => r.payload && r.payload.date && (r.payload.spend !== undefined || r.payload.imp !== undefined))
+  .sort((a, b) => String(a.payload?.date).localeCompare(String(b.payload?.date))));
 function roas(r: any) { const c = Number(r.payload?.conv || 0); const s = Number(r.payload?.spend || 0); return s > 0 ? Number((c * 520 / s).toFixed(1)) : 0; }
 const totals = computed(() => rows.value.reduce((acc, r) => {
   const p = r.payload || {};
@@ -94,7 +98,7 @@ const countries = computed(() => {
   return arr.map(([name, val]) => [name, val.toFixed(1), Math.min(100, val / max * 100)] as [string, string, number]);
 });
 
-function fmt(n: number) { return n >= 10000 ? (n / 10000).toFixed(1) + '万' : String(n); }
+function fmt(n: any) { const v = Number(n) || 0; return v >= 10000 ? (v / 10000).toFixed(1) + '万' : String(v); }
 
 // 顶层注册一次图表，option 闭包读取响应式数据；数据变化后调用 render() 刷新
 const { render: renderTrend } = useChart(trendEl, () => {
@@ -143,9 +147,8 @@ async function syncMeta() {
     ElMessage.success(`已同步 ${res.added + res.updated} 天数据（新增 ${res.added}，更新 ${res.updated}）`);
     await load();
   } catch (e: any) {
-    const msg = e?.message || '同步失败';
-    if (String(msg).includes('Token') || String(msg).includes('配置')) ElMessage.warning('请先到「系统设置 → Meta 投流」配置 Token 与广告账户');
-    else ElMessage.error(msg);
+    // 原样展示后端返回的真实错误，便于定位 Token 权限/接口等问题
+    ElMessage.error({ message: String(e?.message || '同步失败'), duration: 8000, showClose: true });
   } finally { syncing.value = false; }
 }
 async function onCsvFile(file: File) {
