@@ -78,6 +78,24 @@ log "当前提交：$COMMIT"
 # root 拉取后 .git 属主可能变 root，后端 www 用户再次执行 git 会被 dubious ownership 拒绝。
 chown -R "$RUN_USER":"$RUN_USER" "$APP_DIR/.git" 2>/dev/null || true
 
+# 升级器自我更新：git pull 可能带来 upgrade-runner.sh 的修复，
+# 但 /usr/local/bin/qty-upgrade 是部署时复制的旧快照，不会自动更新，旧 bug 会永久残留。
+# 用「写临时文件 + 原子 mv」替换，避免覆盖正在执行的脚本；sudoers 白名单按路径授权，路径不变即生效。
+UPGRADE_BIN="${QTY_UPGRADE_BIN:-/usr/local/bin/qty-upgrade}"
+SELF_SRC="$APP_DIR/scripts/upgrade-runner.sh"
+if [ -f "$SELF_SRC" ] && [ -f "$UPGRADE_BIN" ] && ! cmp -s "$SELF_SRC" "$UPGRADE_BIN"; then
+  if cp "$SELF_SRC" "${UPGRADE_BIN}.new" 2>/dev/null; then
+    chown root:root "${UPGRADE_BIN}.new" 2>/dev/null || true
+    chmod 750 "${UPGRADE_BIN}.new" 2>/dev/null || true
+    if mv -f "${UPGRADE_BIN}.new" "$UPGRADE_BIN" 2>/dev/null; then
+      log "升级器已自我更新（新脚本将在下次升级生效）"
+    else
+      rm -f "${UPGRADE_BIN}.new" 2>/dev/null || true
+      log "警告：升级器自我更新失败，本次仍用旧脚本"
+    fi
+  fi
+fi
+
 # 2. 构建前端
 log "构建前端"
 write_status running "构建前端" "正在构建前端（约 30 秒）…"
@@ -115,16 +133,27 @@ systemctl restart "$SERVICE" >>"$LOG_FILE" 2>&1 || {
 sleep 2
 write_status success "完成" "升级完成，请刷新页面" true
 # ok=true 额外写 commit，供前端展示
-python3 - "$STATUS_FILE" "$COMMIT" <<'PY'
-import json, sys
-path, commit = sys.argv[1:3]
+# 关键：这段 python 以 root 运行，os.replace 会让状态文件属主变成 root。
+# 若不 chown 回运行用户，后端（www）下次写初始状态会 EACCES，
+# 前端表现就是「点一键升级 → Internal server error」。这就是该 500 的根因。
+python3 - "$STATUS_FILE" "$COMMIT" "$RUN_USER" <<'PY'
+import json, sys, os, pwd, grp
+path, commit, run_user = sys.argv[1:4]
 try:
     d = json.load(open(path, encoding='utf-8'))
 except Exception:
     d = {}
 d['commit'] = commit
-with open(path + '.tmp', 'w', encoding='utf-8') as f: json.dump(d, f, ensure_ascii=False)
-import os; os.replace(path + '.tmp', path)
+tmp = path + '.tmp'
+with open(tmp, 'w', encoding='utf-8') as f: json.dump(d, f, ensure_ascii=False)
+os.replace(tmp, path)
+try:
+    u = pwd.getpwnam(run_user)
+    os.chown(path, u.pw_uid, u.pw_gid)
+except Exception:
+    pass
 PY
+# 兜底：确保下次后端可写（write_status 内已 chown，此处覆盖 commit 写入后的属主）
+chown "$RUN_USER":"$RUN_USER" "$STATUS_FILE" 2>/dev/null || true
 log "===== 升级完成：$COMMIT ====="
 exit 0

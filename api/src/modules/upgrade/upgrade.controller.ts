@@ -161,28 +161,44 @@ export class UpgradeController {
     if (!fs.existsSync(this.upgradeBin)) {
       throw new ServiceUnavailableException('服务器未安装升级组件，请用命令行升级（见文档）');
     }
-    // 写初始状态，供前端立刻进入轮询态
-    const dir = path.dirname(this.statusFile);
-    fs.mkdirSync(dir, { recursive: true });
+    // 写初始状态，供前端立刻进入轮询态。
+    // 关键：历史遗留情况下该文件可能被 root 脚本写成 root 属主，后端（www）无权覆盖；
+    // 这里必须容错，绝不能因为写状态失败就抛裸 500 阻断升级——真实拉起由 root 脚本负责，
+    // 它一开始就会自行 write_status 覆盖状态。写不进去仅记录日志、继续触发。
     const init = { state: 'running', stage: '启动', message: '升级任务已启动…', ok: true, updatedAt: Math.floor(Date.now() / 1000) };
-    fs.writeFileSync(this.statusFile, JSON.stringify(init), { mode: 0o644 });
+    try {
+      fs.mkdirSync(path.dirname(this.statusFile), { recursive: true });
+      fs.writeFileSync(this.statusFile, JSON.stringify(init), { mode: 0o644 });
+    } catch (e: any) {
+      console.error('[upgrade] 写初始状态失败（将继续触发升级）：', e?.message || e);
+    }
 
     // detached + unref：父进程（后端）返回响应后不等待子进程；子进程由 init 托管
-    const child = spawn('sudo', ['-n', this.upgradeBin], {
-      detached: true,
-      stdio: 'ignore',
-      cwd: this.appDir,
-    });
-    child.on('error', () => {
+    let child;
+    try {
+      child = spawn('sudo', ['-n', this.upgradeBin], {
+        detached: true,
+        stdio: 'ignore',
+        cwd: this.appDir,
+      });
+    } catch (e: any) {
+      throw new ServiceUnavailableException(`无法启动升级组件：${e?.message || e}`);
+    }
+    child.on('error', (e: any) => {
       // sudo 失败时回写错误状态，让前端能感知
       try {
         const d = this.readJson();
-        fs.writeFileSync(this.statusFile, JSON.stringify({ ...d, state: 'error', message: '无法启动升级组件，请检查 sudo 配置', ok: false, updatedAt: Math.floor(Date.now() / 1000) }));
+        fs.writeFileSync(this.statusFile, JSON.stringify({ ...d, state: 'error', stage: '启动', message: `无法启动升级组件：${e?.message || '请检查 sudo 配置'}`, ok: false, updatedAt: Math.floor(Date.now() / 1000) }));
       } catch { /* ignore */ }
     });
     child.unref();
 
-    await this.audit.log('触发系统升级', 'system', { userId: user.id, ip: req.ip });
+    // 审计写入失败不应导致升级触发返回 500（升级已开始，无法回滚）
+    try {
+      await this.audit.log('触发系统升级', 'system', { userId: user.id, ip: req.ip });
+    } catch (e: any) {
+      console.error('[upgrade] 审计写入失败：', e?.message || e);
+    }
     return { ok: true, message: '升级已启动，请等待完成提示' };
   }
 }
