@@ -75,6 +75,8 @@ if ! git pull --ff-only >>"$LOG_FILE" 2>&1; then
 fi
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 log "当前提交：$COMMIT"
+# root 拉取后 .git 属主可能变 root，后端 www 用户再次执行 git 会被 dubious ownership 拒绝。
+chown -R "$RUN_USER":"$RUN_USER" "$APP_DIR/.git" 2>/dev/null || true
 
 # 2. 构建前端
 log "构建前端"

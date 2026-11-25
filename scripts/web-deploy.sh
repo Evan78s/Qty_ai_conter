@@ -96,6 +96,8 @@ if [ -d "$APP_DIR/.git" ]; then
   # 脚本以 root 运行，源码目录通常属主是 www；高版本 Git 会因 dubious ownership 拒绝 pull。
   git config --global --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
   git -C "$APP_DIR" pull --ff-only
+  # root 拉取后把 .git 属主还给运行用户，避免后端进程执行 git 时报 dubious ownership
+  chown -R "$RUN_USER:$RUN_GROUP" "$APP_DIR/.git" 2>/dev/null || true
 else
   if [ -e "$APP_DIR" ] && [ -n "$(ls -A "$APP_DIR" 2>/dev/null)" ]; then
     echo "✗ 源码目录 $APP_DIR 已存在且非空。"

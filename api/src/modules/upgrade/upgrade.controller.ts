@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Req, UseGuards, ForbiddenException, ServiceUnavailableException,
+  Controller, Get, Post, Req, Query, UseGuards, ForbiddenException, ServiceUnavailableException,
 } from '@nestjs/common';
 import { execFileSync, spawn } from 'child_process';
 import fs from 'fs';
@@ -48,31 +48,91 @@ export class UpgradeController {
       return m ? m[1] : 'unknown';
     } catch { return 'unknown'; }
   }
+  /**
+   * 本地提交号：优先直接读 .git 文件，不依赖 git 命令。
+   * 后端进程以 www 运行，源码由 root 脚本操作后属主可能变 root，
+   * 高版本 Git 会报 dubious ownership 并拒绝所有 git 命令——这是「本地提交 —」的根因。
+   */
   private currentCommit(): string {
     try {
-      return execFileSync('git', ['-C', this.appDir, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', timeout: 5000 }).trim();
+      const gitDir = path.join(this.appDir, '.git');
+      const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
+      const refMatch = head.match(/^ref:\s*(.+)$/);
+      if (refMatch) {
+        try {
+          return fs.readFileSync(path.join(gitDir, refMatch[1]), 'utf8').trim().slice(0, 7);
+        } catch {
+          // 提交可能被打包进 packed-refs
+          try {
+            const packed = fs.readFileSync(path.join(gitDir, 'packed-refs'), 'utf8');
+            const line = packed.split('\n').find((l) => l.endsWith(` ${refMatch[1]}`));
+            if (line) return line.split(' ')[0].slice(0, 7);
+          } catch { /* ignore */ }
+        }
+      } else if (/^[0-9a-f]{40}$/i.test(head)) {
+        return head.slice(0, 7);
+      }
+    } catch { /* ignore */ }
+    try {
+      return execFileSync('git', ['-c', 'safe.directory=*', '-C', this.appDir, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', timeout: 5000 }).trim();
     } catch { return ''; }
   }
-  /** 获取远端最新提交号（不影响主流程，失败返回空）。 */
-  private remoteCommit(): string {
+
+  /** 远端检测结果带缓存：前端轮询时避免每次都打 GitHub。 */
+  private remoteCache: { commit: string; error: string; at: number } = { commit: '', error: '', at: 0 };
+
+  /** 获取远端最新提交号：优先 GitHub API（15 秒），失败退回 git ls-remote（20 秒）。 */
+  private async remoteCommit(force = false): Promise<{ commit: string; error: string; at: number }> {
+    const now = Date.now();
+    if (!force && this.remoteCache.at && now - this.remoteCache.at < 3 * 60 * 1000) {
+      return this.remoteCache;
+    }
+    let commit = '';
+    let error = '';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const out = execFileSync('git', ['-C', this.appDir, 'ls-remote', 'origin', 'refs/heads/master'], { encoding: 'utf8', timeout: 8000 });
-      return out.trim().split(/\s+/)[0]?.slice(0, 7) || '';
-    } catch { return ''; }
+      const res = await fetch('https://api.github.com/repos/Evan78s/Qty_ai_conter/commits/master', {
+        headers: { 'User-Agent': 'quetaiyi-upgrade-check', Accept: 'application/vnd.github+json' },
+        signal: controller.signal,
+      } as any);
+      if (res.ok) {
+        const data: any = await res.json();
+        commit = String(data?.sha || '').slice(0, 7);
+      } else {
+        error = `GitHub API 返回 ${res.status}`;
+      }
+    } catch (e: any) {
+      error = e?.name === 'AbortError' ? '连接 GitHub 超时' : '无法连接 GitHub';
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!commit) {
+      try {
+        const out = execFileSync('git', ['-c', 'safe.directory=*', '-C', this.appDir, 'ls-remote', 'origin', 'refs/heads/master'], { encoding: 'utf8', timeout: 20000 });
+        commit = out.trim().split(/\s+/)[0]?.slice(0, 7) || '';
+        if (commit) error = '';
+      } catch { /* 保留上面的错误信息 */ }
+    }
+    this.remoteCache = { commit, error, at: now };
+    return this.remoteCache;
   }
 
   /** 状态查询：前端轮询。 */
   @Get('status')
-  async status() {
+  async status(@Query('force') force?: string) {
     const st = this.readJson();
     const local = this.currentCommit();
-    const remote = this.remoteCommit();
+    const remote = await this.remoteCommit(force === '1');
+    const hasUpdate = remote.commit && local ? remote.commit !== local : null;
     return {
       ok: true,
       version: this.currentVersion(),
       commit: st.commit || local,
-      remoteCommit: remote,
-      hasUpdate: !!(remote && local && remote !== local),
+      remoteCommit: remote.commit,
+      checkError: remote.error,
+      checkedAt: remote.at,
+      hasUpdate,
       state: st.state || 'idle',        // idle | running | success | error
       stage: st.stage || '',
       message: st.message || '',

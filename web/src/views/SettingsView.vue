@@ -149,8 +149,13 @@
             <div class="upgrade-grid">
               <div><span>当前版本</span><b>{{ upgradeInfo?.version || '—' }}</b></div>
               <div><span>本地提交</span><b>{{ upgradeInfo?.commit || '—' }}</b></div>
-              <div><span>远程最新</span><b>{{ upgradeInfo?.remoteCommit || '检测失败' }}</b></div>
-              <div><span>组件状态</span><b :class="upgradeInfo?.hasUpdate ? 'warn' : 'ok'">{{ upgradeInfo?.hasUpdate ? '● 有新版本' : (upgradeInfo?.hasUpdate === false ? '● 已是最新' : '—') }}</b></div>
+              <div><span>远程最新</span><b :title="upgradeInfo?.checkError || ''">{{ upgradeInfo?.remoteCommit || (upgradeInfo?.checkError ? '检测失败' : '检测中…') }}</b></div>
+              <div><span>组件状态</span><b :class="upgradeInfo?.hasUpdate ? 'warn' : (upgradeInfo?.hasUpdate === false ? 'ok' : '')">{{ upgradeInfo?.hasUpdate ? '● 有新版本' : (upgradeInfo?.hasUpdate === false ? '● 已是最新' : '● 无法确认') }}</b></div>
+            </div>
+
+            <div v-if="upgradeInfo?.checkError" class="help-box" style="border-color:#e6a23c">
+              <b>版本检测未成功</b>
+              <p>{{ upgradeInfo.checkError }}。「重新拉取并升级」不受影响，可直接点右侧按钮升级；升级后版本号以左下角显示为准。</p>
             </div>
 
             <div v-if="upgradeInfo && upgradeInfo.state !== 'idle'" class="upgrade-progress" :class="upgradeInfo.state">
@@ -159,7 +164,7 @@
             </div>
 
             <div style="display:flex;gap:8px;margin:16px 0;flex-wrap:wrap">
-              <el-button size="small" :loading="upgrading" @click="refreshUpgrade">刷新状态</el-button>
+              <el-button size="small" :loading="upgrading" @click="refreshUpgrade(false, true)">刷新状态</el-button>
               <el-button size="small" @click="openUpgradeLog">查看日志</el-button>
               <el-button v-if="app.isSuper" type="primary" size="small" :disabled="upgradeInfo?.state === 'running'" :loading="upgrading" @click="doUpgrade">
                 {{ upgradeInfo?.hasUpdate ? '一键升级到最新版' : '重新拉取并升级' }}
@@ -349,8 +354,8 @@ let upgradeTimer: any = null;
 const stageMap: Record<string, number> = { '准备': 5, '启动': 8, '拉取代码': 20, '构建前端': 45, '构建后端': 70, '发布前端': 88, '重启服务': 96, '完成': 100 };
 function upgradeStagePercent(stage: string) { return stageMap[stage] || (stage ? 50 : 10); }
 
-async function refreshUpgrade(silent = false) {
-  try { upgradeInfo.value = await api.upgradeStatus(); }
+async function refreshUpgrade(silent = false, force = false) {
+  try { upgradeInfo.value = await api.upgradeStatus(force); }
   catch (e: any) { if (!silent) ElMessage.error(e.message || '状态获取失败'); }
 }
 

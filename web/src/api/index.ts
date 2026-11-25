@@ -173,7 +173,7 @@ export const api = {
   saveBrand: (body: any) => raw('/settings/brand', { method: 'POST', body: JSON.stringify(body) }),
   dbStatus: () => raw('/settings/database'),
   // 系统升级（仅超管可触发）
-  upgradeStatus: () => raw('/upgrade/status'),
+  upgradeStatus: (force = false) => raw(`/upgrade/status${force ? '?force=1' : ''}`),
   upgradeLog: () => raw('/upgrade/log'),
   upgradeTrigger: () => raw('/upgrade/trigger', { method: 'POST', body: '{}' }),
   // 用户与权限
