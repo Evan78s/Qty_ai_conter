@@ -77,33 +77,38 @@ let refreshing: Promise<string | null> | null = null;
 export function refreshAccess(): Promise<string | null> {
   if (refreshing) return refreshing;
   refreshing = (async () => {
-    const apply = async (r: Response): Promise<string | null> => {
-      if (!r.ok) return null;
-      const data = await r.json().catch(() => ({}));
-      if (!data?.accessToken) return null;
-      setAccessToken(data.accessToken);
-      if (data.refreshToken) saveRefreshToken(data.refreshToken);
-      return data.accessToken as string;
-    };
-    // 优先用 localStorage 里的最新 token（多标签更可靠），失败再走 HttpOnly Cookie。
-    const local = loadRefreshToken();
-    if (local) {
-      try {
-        const t = await apply(await fetch('/api/auth/refresh', {
-          method: 'POST', credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: local }),
-        }));
-        if (t) return t;
-      } catch { /* ignore */ }
-    }
+    // 关键：finally 必须包住整个流程，覆盖「本地 token 成功直接 return」这条分支。
+    // 只放在 Cookie 分支的 finally 里会导致单飞标志永久停留在这次成功的 Promise 上，
+    // 之后每次 401 都拿到旧的 access token，重试再 401 → 被踢回登录页、写操作全部失败。
     try {
-      return await apply(await fetch('/api/auth/refresh', {
-        method: 'POST', credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }, body: '{}',
-      }));
-    } catch {
-      return null;
+      const apply = async (r: Response): Promise<string | null> => {
+        if (!r.ok) return null;
+        const data = await r.json().catch(() => ({}));
+        if (!data?.accessToken) return null;
+        setAccessToken(data.accessToken);
+        if (data.refreshToken) saveRefreshToken(data.refreshToken);
+        return data.accessToken as string;
+      };
+      // 优先用 localStorage 里的最新 token（多标签更可靠），失败再走 HttpOnly Cookie。
+      const local = loadRefreshToken();
+      if (local) {
+        try {
+          const t = await apply(await fetch('/api/auth/refresh', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken: local }),
+          }));
+          if (t) return t;
+        } catch { /* ignore */ }
+      }
+      try {
+        return await apply(await fetch('/api/auth/refresh', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }, body: '{}',
+        }));
+      } catch {
+        return null;
+      }
     } finally {
       refreshing = null;
     }
