@@ -34,6 +34,13 @@ export class MetaController {
     return this.meta.test((req as any).authUser as AuthUser, this.ctx(req));
   }
 
+  @Post('probe')
+  @HttpCode(200)
+  @RequirePerm('ads', PERM.EDIT)
+  probe(@Req() req: Request) {
+    return this.meta.probe((req as any).authUser as AuthUser, this.ctx(req));
+  }
+
   @Post('sync')
   @HttpCode(200)
   @RequirePerm('ads', PERM.EDIT)

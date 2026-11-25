@@ -28,7 +28,10 @@ export class AuthController {
   @Post('refresh')
   @HttpCode(200)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const token = req.cookies?.[COOKIE_REFRESH] || (req.body as any)?.refreshToken;
+    // 顺序必须与前端 refreshAccess 一致：先 body（localStorage 兜底），再 Cookie。
+    // 若后端优先 Cookie，前端用本地新 token 请求时会被旧的 Cookie token 覆盖，
+    // 导致「本地已是新 token、后端却签发旧会话」的竞态，表现为反复掉线。
+    const token = (req.body as any)?.refreshToken || req.cookies?.[COOKIE_REFRESH];
     const result = await this.auth.refresh(token, ctx(req));
     this.setRefreshCookie(req, res, result.refreshToken);
     return result;

@@ -7,7 +7,9 @@ import type { AuthUser } from '../../common/context';
 import type { AuditCtx } from '../../common/audit.service';
 import { AuditService } from '../../common/audit.service';
 
-const GRAPH = 'https://graph.facebook.com/v21.0';
+// 使用较新的稳定版本。v21.0 已较旧，Meta 自 2026-07 起启用 Marketing API 自动升级，
+// 老版本 insights 的字段/行为可能已变化，导致「测试连接正常但 insights 为空」。
+const GRAPH = 'https://graph.facebook.com/v24.0';
 const CONV_FALLBACK = ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'lead', 'complete_registration'];
 
 interface MetaConfig {
@@ -129,6 +131,61 @@ export class MetaService {
     }
   }
 
+  /**
+   * 诊断：把 Graph API 的原始响应透传出来，用于排查「测试连接正常但看板无数据」。
+   * 分别请求账户信息、最简 insights、带 actions 的完整 insights，记录每步的 URL/状态/原始错误。
+   */
+  async probe(user: AuthUser, ctx: AuditCtx) {
+    const c = await this.cfg();
+    if (!c?.accessToken || !c.accountId) throw new BadRequestException('尚未配置 Meta Token 或广告账户 ID');
+    const act = normalizeAct(c.accountId);
+    const until = new Date().toISOString().slice(0, 10);
+    const since = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+    const token = c.accessToken;
+    const mask = (u: string) => u.replace(/access_token=[^&]+/, 'access_token=***');
+
+    const call = async (label: string, url: string) => {
+      const started = Date.now();
+      try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(30000) } as any);
+        const rawText = await res.text();
+        let data: any; try { data = JSON.parse(rawText); } catch { data = { raw: rawText.slice(0, 500) }; }
+        const rows = Array.isArray(data?.data) ? data.data : [];
+        return {
+          label, ok: res.ok, status: res.status, url: mask(url),
+          rowCount: rows.length,
+          sample: rows.slice(0, 2),
+          rawError: data?.error ? { message: data.error.message, code: data.error.code, type: data.error.type, subcode: data.error.error_subcode, fbtrace_id: data.error.fbtrace_id } : null,
+          elapsedMs: Date.now() - started,
+        };
+      } catch (e: any) {
+        return { label, ok: false, status: 0, url: mask(url), rowCount: 0, sample: [], rawError: { message: e?.message || String(e) }, elapsedMs: Date.now() - started };
+      }
+    };
+
+    const accountUrl = `${GRAPH}/${act}?fields=name,account_status,currency,timezone_name&access_token=${encodeURIComponent(token)}`;
+    const insightBase = `${GRAPH}/${act}/insights?` + new URLSearchParams({
+      level: 'account', time_range: JSON.stringify({ since, until }), limit: '5', access_token: token,
+    }).toString();
+    const insightMinimal = `${GRAPH}/${act}/insights?` + new URLSearchParams({
+      level: 'account', time_increment: '1', time_range: JSON.stringify({ since, until }),
+      fields: 'date_start,spend,impressions,clicks', limit: '5', access_token: token,
+    }).toString();
+    const insightFull = `${GRAPH}/${act}/insights?` + new URLSearchParams({
+      level: 'account', time_increment: '1', time_range: JSON.stringify({ since, until }),
+      fields: 'date_start,spend,impressions,reach,clicks,actions', limit: '5', access_token: token,
+    }).toString();
+
+    const checks = await Promise.all([
+      call('账户信息', accountUrl),
+      call('insights-最简(无time_increment/无字段)', insightBase),
+      call('insights-按天(基础字段)', insightMinimal),
+      call('insights-按天(含reach/actions)', insightFull),
+    ]);
+    await this.audit.log('Meta 连接诊断', 'system', ctx);
+    return { ok: true, version: GRAPH, accountId: act, since, until, checks };
+  }
+
   private async fetchInsights(c: MetaConfig, since: string, until: string) {
     const out: any[] = [];
     let next: string | undefined = `${GRAPH}/${normalizeAct(c.accountId)}/insights?`
@@ -192,7 +249,10 @@ export class MetaService {
     } catch (e: any) {
       throw new BadRequestException(`Meta 接口拉取失败：${e?.message || e}`);
     }
-    if (!rows.length) return { ok: true, added: 0, updated: 0, skipped: 0, since, until, message: '该时间段没有投放数据' };
+    if (!rows.length) return {
+      ok: true, added: 0, updated: 0, skipped: 0, since, until, rawRows: 0,
+      message: `Meta 接口在 ${since} ~ ${until} 返回 0 条数据。可点「诊断 Meta」查看原始响应，确认是账户无消耗、日期范围还是权限/版本问题。`,
+    };
     const countries = await this.fetchCountries(c, since, until);
     const existing = await db.select().from(schema.bizRecords).where(eq(schema.bizRecords.bizType, 'ads_daily'));
     const index = new Map<string, any>();
@@ -233,7 +293,7 @@ export class MetaService {
       }
     }
     await this.audit.log(`同步 Meta 投流数据 ${added}+${updated} 条`, 'ads', ctx);
-    return { ok: true, added, updated, since, until, rate: c.exchangeRate };
+    return { ok: true, added, updated, rawRows: rows.length, since, until, rate: c.exchangeRate };
   }
 
   /** CSV 导入：支持 Ads Manager 导出格式，按日期聚合后 upsert。 */

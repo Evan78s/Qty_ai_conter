@@ -99,7 +99,9 @@ export function refreshAccess(): Promise<string | null> {
             body: JSON.stringify({ refreshToken: local }),
           }));
           if (t) return t;
-        } catch { /* ignore */ }
+          // 本地 token 被服务端拒绝（已轮转/过期）：清掉，避免下次继续用它撞 401。
+          saveRefreshToken(null);
+        } catch { /* 网络错误不清，保留下次重试机会 */ }
       }
       try {
         return await apply(await fetch('/api/auth/refresh', {
@@ -201,6 +203,7 @@ export const api = {
   metaConfig: () => raw('/meta/config'),
   saveMetaConfig: (body: any) => raw('/meta/config', { method: 'POST', body: JSON.stringify(body) }),
   metaTest: () => raw('/meta/test', { method: 'POST', body: '{}' }),
+  metaProbe: () => raw('/meta/probe', { method: 'POST', body: '{}' }),
   metaSync: (body: { since?: string; until?: string } = {}) => raw('/meta/sync', { method: 'POST', body: JSON.stringify(body) }),
   metaImportCsv: (body: { csv: string; exchangeRate?: number }) => raw('/meta/import', { method: 'POST', body: JSON.stringify(body) }),
   // 每日对账：飞书「门店每日台账」+ Agent 核对

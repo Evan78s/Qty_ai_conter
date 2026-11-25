@@ -2,7 +2,7 @@
   <div>
     <div class="page-head">
       <div><div class="page-title">境外推广看板</div><div class="page-desc">Meta 与 Google Ads 投流数据 · 录入真实数据后自动统计</div></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap"><el-radio-group v-model="platform"><el-radio-button value="meta">Meta</el-radio-button><el-radio-button value="google">Google Ads</el-radio-button></el-radio-group><template v-if="platform==='meta'"><el-button :loading="syncing" @click="syncMeta">从 Meta 同步</el-button><el-button @click="csvDialog=true">导入 CSV</el-button></template><el-button @click="entryDialog=true">+ 录入数据</el-button><el-button type="primary" @click="runAi"><el-icon><Sparkles /></el-icon>AI 分析</el-button></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><el-radio-group v-model="platform"><el-radio-button value="meta">Meta</el-radio-button><el-radio-button value="google">Google Ads</el-radio-button></el-radio-group><template v-if="platform==='meta'"><el-button :loading="syncing" @click="syncMeta">从 Meta 同步</el-button><el-button @click="csvDialog=true">导入 CSV</el-button><el-button :loading="probeLoading" @click="probeMeta">诊断 Meta</el-button></template><el-button @click="entryDialog=true">+ 录入数据</el-button><el-button type="primary" @click="runAi"><el-icon><Sparkles /></el-icon>AI 分析</el-button></div>
     </div>
     <div class="grid g4">
       <div v-for="k in kpis" :key="k.lb" class="card kpi"><div class="top"><span class="lb">{{ k.lb }}</span><span class="ic">{{ k.ic }}</span></div><div class="val num">{{ k.v }}</div><div class="ft"><span class="chip flat">{{ k.ft }}</span></div></div>
@@ -32,6 +32,25 @@
       <template #footer><el-button @click="csvDialog=false">取消</el-button><el-button type="primary" :loading="csvImporting" :disabled="!csvText.trim()" @click="importCsv">导入</el-button></template>
     </el-dialog>
 
+    <el-dialog v-model="probeDialog" title="Meta 连接诊断" width="760px">
+      <div class="mini-note" style="margin-bottom:10px">直接请求 Meta Graph API 的原始响应，用于排查「测试连接正常但看板无数据」。Token 已打码。</div>
+      <div v-if="probeLoading" style="padding:24px;text-align:center;color:var(--ink2)">正在诊断，可能需要 10～30 秒…</div>
+      <template v-else-if="probeResult">
+        <div class="help-box" style="margin-bottom:10px">接口版本 {{ probeResult.version }} · 账户 {{ probeResult.accountId }} · 查询区间 {{ probeResult.since }} ~ {{ probeResult.until }}</div>
+        <div v-for="c in probeResult.checks" :key="c.label" style="border:1px solid var(--line2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <b style="font-size:13px">{{ c.label }}</b>
+            <el-tag :type="c.ok?'success':'danger'" size="small">{{ c.ok?'成功':'失败' }}</el-tag>
+            <span style="color:var(--ink2);font-size:12px">{{ c.status }} · {{ c.elapsedMs }}ms · 返回 {{ c.rowCount }} 行</span>
+          </div>
+          <div v-if="c.rawError" style="color:#c0392b;font-size:12px;line-height:1.6">错误：{{ c.rawError.message }}<span v-if="c.rawError.code">（code {{ c.rawError.code }}/{{ c.rawError.subcode }}）</span><br>trace：{{ c.rawError.fbtrace_id }}</div>
+          <pre v-if="c.sample?.length" style="margin:6px 0 0;padding:8px;background:#F7F8F6;border-radius:6px;font-size:11px;max-height:180px;overflow:auto">{{ JSON.stringify(c.sample, null, 2) }}</pre>
+          <div v-else-if="c.ok" style="color:var(--ink2);font-size:12px">该查询返回 0 行</div>
+        </div>
+      </template>
+      <template #footer><el-button @click="probeDialog=false">关闭</el-button></template>
+    </el-dialog>
+
     <el-dialog v-model="entryDialog" title="录入投流数据" width="480px"><el-form label-position="top">
       <el-form-item label="日期"><el-date-picker v-model="entry.date" type="date" value-format="YYYY-MM-DD" style="width:100%"/></el-form-item>
       <div class="grid g2">
@@ -59,6 +78,7 @@ import { useChart, axis } from '../composables';
 const platform = ref('meta'); const aiOpen = ref(false); const aiLoading = ref(false); const aiResult = ref('');
 const allRows = ref<any[]>([]); const entryDialog = ref(false);
 const syncing = ref(false); const csvDialog = ref(false); const csvText = ref(''); const csvImporting = ref(false);
+const probeDialog = ref(false); const probeLoading = ref(false); const probeResult = ref<any>(null);
 const entry = ref<any>({ date: new Date().toISOString().slice(0, 10), spend: 0, imp: 0, clicks: 0, conv: 0, countries: '' });
 const trendEl = ref<HTMLElement | null>(null); const funnelEl = ref<HTMLElement | null>(null);
 
@@ -150,6 +170,15 @@ async function syncMeta() {
     // 原样展示后端返回的真实错误，便于定位 Token 权限/接口等问题
     ElMessage.error({ message: String(e?.message || '同步失败'), duration: 8000, showClose: true });
   } finally { syncing.value = false; }
+}
+async function probeMeta() {
+  probeDialog.value = true; probeLoading.value = true; probeResult.value = null;
+  try {
+    probeResult.value = await api.metaProbe();
+  } catch (e: any) {
+    ElMessage.error({ message: String(e?.message || '诊断失败'), duration: 8000, showClose: true });
+    probeDialog.value = false;
+  } finally { probeLoading.value = false; }
 }
 async function onCsvFile(file: File) {
   csvText.value = await file.text();
