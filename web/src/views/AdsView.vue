@@ -16,14 +16,14 @@
     </div>
     <div class="grid g2" style="margin-top:16px">
       <div class="card"><div class="card-h"><h3>投流数据明细</h3><el-button size="small" text type="danger" @click="clearAll">清空</el-button></div><div class="card-b" style="padding:0">
-        <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['日期','花费','曝光','点击','转化','ROAS']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
-          <tr v-for="s in rows" :key="s.id"><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{s.payload?.date}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">¥{{s.payload?.spend}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(s.payload?.imp)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(s.payload?.clicks)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{s.payload?.conv}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><span class="chip" :class="roas(s)>=3.5?'up':roas(s)<2.5?'down':'flat'">{{roas(s)}}</span></td></tr>
+        <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['日期','花费','曝光','点击','转化','转化口径','ROAS']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
+          <tr v-for="s in rows" :key="s.id"><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{s.payload?.date}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">¥{{s.payload?.spend}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(s.payload?.imp)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(s.payload?.clicks)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{s.payload?.conv}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);color:var(--ink2);font-size:12px">{{ s.payload?.convLabel || (s.payload?.source==='api'?'—':'手动') }}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><span class="chip" :class="roas(s)>=3.5?'up':roas(s)<2.5?'down':'flat'">{{roas(s)}}</span></td></tr>
         </tbody></table>
         <div v-if="!rows.length" style="padding:24px;text-align:center;color:var(--ink2)">暂无 {{platform==='meta'?'Meta':'Google Ads'}} 数据。</div>
       </div></div>
       <div class="card"><div class="card-h"><h3>转化漏斗</h3></div><div class="card-b"><div ref="funnelEl" class="chart"></div></div></div>
     </div>
-    <div class="mini-note">Meta 数据来自官方 Graph API 同步或 CSV 导入（按汇率换算成人民币）；Google Ads 暂为手动录入。AI 分析需先在「AI 模型与密钥」配置 Key。</div>
+    <div class="mini-note">Meta 数据来自官方 Graph API 同步或 CSV 导入（按汇率换算成人民币）；「转化」只统计真实转化事件（购买/线索/私信咨询），已剔除帖子互动、视频播放等噪音——明细表「转化口径」列可核对采用的事件。可在「系统设置 → Meta 投流」指定自定义转化事件。Google Ads 暂为手动录入。AI 分析需先在「AI 模型与密钥」配置 Key。</div>
 
     <el-dialog v-model="csvDialog" title="导入 Meta 广告 CSV" width="560px">
       <div class="mini-note" style="margin-bottom:10px">在 Ads Manager 导出报表（CSV），或直接从 Excel 复制表格内容粘贴进来。系统按日期聚合，重复日期会覆盖。</div>
@@ -37,6 +37,12 @@
       <div v-if="probeLoading" style="padding:24px;text-align:center;color:var(--ink2)">正在诊断，可能需要 10～30 秒…</div>
       <template v-else-if="probeResult">
         <div class="help-box" style="margin-bottom:10px">接口版本 {{ probeResult.version }} · 账户 {{ probeResult.accountId }} · 查询区间 {{ probeResult.since }} ~ {{ probeResult.until }}</div>
+        <div v-if="probeResult.convAnalysis?.length" class="help-box" style="margin-bottom:10px">
+          <b>转化口径分析</b>：{{ probeResult.configuredEvent ? '自定义事件 ' + probeResult.configuredEvent : '自动识别' }}<br>
+          <span v-for="(c, i) in probeResult.convAnalysis" :key="i" style="display:block;margin-top:4px">
+            样本{{ i + 1 }}：采用 <b>{{ c.event || '无' }}</b>（{{ c.label }}）→ 转化 <b>{{ c.conv }}</b>；候选事件：{{ Object.entries(c.candidates || {}).map(([k, v]) => k + '=' + v).join('、') }}
+          </span>
+        </div>
         <div v-for="c in probeResult.checks" :key="c.label" style="border:1px solid var(--line2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
             <b style="font-size:13px">{{ c.label }}</b>
@@ -164,7 +170,8 @@ async function syncMeta() {
   syncing.value = true;
   try {
     const res = await api.metaSync({});
-    ElMessage.success(`已同步 ${res.added + res.updated} 天数据（新增 ${res.added}，更新 ${res.updated}）`);
+    const basis = res.convEvents?.length ? ` · 转化口径：${res.convEvents.join('、')}` : '';
+    ElMessage.success({ message: `已同步 ${res.added + res.updated} 天数据（新增 ${res.added}，更新 ${res.updated}）${basis}`, duration: 6000 });
     await load();
   } catch (e: any) {
     // 原样展示后端返回的真实错误，便于定位 Token 权限/接口等问题

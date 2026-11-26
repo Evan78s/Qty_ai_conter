@@ -10,7 +10,6 @@ import { AuditService } from '../../common/audit.service';
 // 使用较新的稳定版本。v21.0 已较旧，Meta 自 2026-07 起启用 Marketing API 自动升级，
 // 老版本 insights 的字段/行为可能已变化，导致「测试连接正常但 insights 为空」。
 const GRAPH = 'https://graph.facebook.com/v24.0';
-const CONV_FALLBACK = ['purchase', 'omni_purchase', 'offsite_conversion.fb_pixel_purchase', 'lead', 'complete_registration'];
 
 interface MetaConfig {
   accessToken: string;
@@ -25,20 +24,58 @@ function normalizeAct(id: string) {
   return s ? `act_${s}` : '';
 }
 
-/** 从 actions 里挑转化数：优先指定事件，其次常见事件，最后取第一个。 */
-function pickConversions(actions: any[] | undefined, preferred: string): number {
-  if (!Array.isArray(actions)) return 0;
-  const sum = (pred: (t: string) => boolean) => actions.filter((a) => pred(String(a.action_type || '')))
-    .reduce((n, a) => n + (Number(a.value) || 0), 0);
+/**
+ * 转化事件优先级组。关键教训：同一次咨询会被 Meta 记成多种 action_type
+ * （total_messaging_connection / messaging_first_reply / messaging_conversation_started_7d 等），
+ * 它们高度重叠——组内能取「最大值」，绝不能累加；组间命中即止，避免重复计数。
+ * 更绝不能把 link_click / post_engagement / video_view 这类互动噪音当转化。
+ */
+const CONV_GROUPS: { key: string; label: string; match: (t: string) => boolean }[] = [
+  { key: 'purchase', label: '购买', match: (t) => t === 'purchase' || t === 'omni_purchase' || t.endsWith('.fb_pixel_purchase') },
+  { key: 'lead', label: '线索', match: (t) => t === 'lead' || t === 'onsite_conversion.lead' },
+  // 私信咨询 / 本地生活留资：养生馆这类账户的核心转化
+  { key: 'messaging', label: '私信咨询', match: (t) => t === 'onsite_conversion.total_messaging_connection' || t.startsWith('onsite_conversion.messaging_') || t === 'onsite_conversion.post_net_message' },
+  { key: 'registration', label: '注册', match: (t) => t === 'complete_registration' },
+];
+
+export interface ConvPick {
+  conv: number;
+  event: string;
+  label: string;
+  candidates: Record<string, number>;
+}
+
+/**
+ * 从 actions 挑出真实转化数。返回采用的事件与各候选计数，便于前端核对「转化口径」。
+ * 顺序：用户指定事件优先 → 优先级组（组内取最大、组间命中即止）→ 兜底 0（绝不全加）。
+ */
+function pickConversions(actions: any[] | undefined, preferred: string): ConvPick {
+  const empty: ConvPick = { conv: 0, event: '', label: '', candidates: {} };
+  if (!Array.isArray(actions)) return empty;
+  const candidates: Record<string, number> = {};
+  for (const a of actions) {
+    const t = String(a?.action_type || '');
+    if (!t) continue;
+    candidates[t] = (candidates[t] || 0) + (Number(a?.value) || 0);
+  }
+  // 用户明确指定的事件优先（精确匹配；其次按后缀匹配 fb_pixel_xxx）
   if (preferred) {
-    const v = sum((t) => t === preferred);
-    if (v) return v;
+    let v = candidates[preferred] || 0;
+    if (!v) for (const [k, n] of Object.entries(candidates)) if (k.endsWith('.' + preferred)) v += n;
+    if (v > 0) return { conv: v, event: preferred, label: '自定义事件', candidates };
   }
-  for (const key of CONV_FALLBACK) {
-    const v = sum((t) => t === key || t.endsWith('.' + key));
-    if (v) return v;
+  // 优先级组：组内取最大值，组间命中即止
+  for (const g of CONV_GROUPS) {
+    const members = Object.keys(candidates).filter((k) => g.match(k));
+    if (!members.length) continue;
+    const max = Math.max(0, ...members.map((k) => candidates[k]));
+    if (max > 0) {
+      const event = members.reduce((best, k) => (candidates[k] > candidates[best] ? k : best), members[0]);
+      return { conv: max, event, label: g.label, candidates };
+    }
   }
-  return actions.reduce((n, a) => n + (Number(a.value) || 0), 0);
+  // 没有任何可识别的转化事件 → 0，绝不把互动/播放数据加起来冒充转化
+  return { conv: 0, event: '', label: '未识别到转化事件', candidates };
 }
 
 @Injectable()
@@ -182,8 +219,17 @@ export class MetaService {
       call('insights-按天(基础字段)', insightMinimal),
       call('insights-按天(含reach/actions)', insightFull),
     ]);
+    // 从含 actions 的样本里直接算出转化口径，诊断时一眼可见「转化到底取的哪个事件」
+    const fullCheck = checks.find((c) => c.label.includes('actions'));
+    const convAnalysis = fullCheck?.sample?.length
+      ? fullCheck.sample.map((s: any) => pickConversions(s?.actions, c.conversionAction))
+          .map((p: ConvPick) => ({ event: p.event, label: p.label, conv: p.conv, candidates: p.candidates }))
+      : [];
     await this.audit.log('Meta 连接诊断', 'system', ctx);
-    return { ok: true, version: GRAPH, accountId: act, since, until, checks };
+    return {
+      ok: true, version: GRAPH, accountId: act, since, until, checks,
+      configuredEvent: c.conversionAction || '', convAnalysis,
+    };
   }
 
   private async fetchInsights(c: MetaConfig, since: string, until: string) {
@@ -225,7 +271,7 @@ export class MetaService {
         const k = String(r.country || '其他');
         const v = map.get(k) || { spend: 0, conv: 0 };
         v.spend += Number(r.spend) || 0;
-        v.conv += pickConversions(r.actions, c.conversionAction);
+        v.conv += pickConversions(r.actions, c.conversionAction).conv;
         map.set(k, v);
       }
       return [...map.entries()]
@@ -261,11 +307,14 @@ export class MetaService {
       if ((p.platform || 'meta') === 'meta') index.set(String(p.date || ''), r);
     }
     let added = 0, updated = 0;
+    const convEvents = new Set<string>();       // 本次实际采用的转化事件，供前端核对口径
     for (const r of rows) {
       const date = String(r.date_start || '').slice(0, 10);
       if (!date) continue;
       const spendUsd = Number(r.spend) || 0;
-      const conv = pickConversions(r.actions, c.conversionAction);
+      const pick = pickConversions(r.actions, c.conversionAction);
+      const conv = pick.conv;
+      if (pick.event) convEvents.add(`${pick.event}（${pick.label}）`);
       const payload = {
         platform: 'meta', date,
         spend: Number((spendUsd * c.exchangeRate).toFixed(2)),
@@ -274,6 +323,8 @@ export class MetaService {
         reach: Number(r.reach) || 0,
         clicks: Number(r.clicks) || 0,
         conv, countries,
+        // 转化口径透明化：采用的事件 + 所有候选计数，便于核对「转化是否算对」
+        convEvent: pick.event, convLabel: pick.label, convCandidates: pick.candidates,
         costPerResult: conv ? Number((spendUsd / conv).toFixed(2)) : 0,
         source: 'api', syncedAt: Date.now(),
       };
@@ -293,7 +344,10 @@ export class MetaService {
       }
     }
     await this.audit.log(`同步 Meta 投流数据 ${added}+${updated} 条`, 'ads', ctx);
-    return { ok: true, added, updated, rawRows: rows.length, since, until, rate: c.exchangeRate };
+    return {
+      ok: true, added, updated, rawRows: rows.length, since, until, rate: c.exchangeRate,
+      convEvents: [...convEvents], configuredEvent: c.conversionAction || '',
+    };
   }
 
   /** CSV 导入：支持 Ads Manager 导出格式，按日期聚合后 upsert。 */
