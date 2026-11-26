@@ -178,8 +178,9 @@ async function syncMeta(since?: string, until?: string) {
   syncing.value = true;
   try {
     const res = await api.metaSync(since && until ? { since, until } : {});
+    const cur = res.accountCurrency ? ` · 账户币种 ${res.accountCurrency}${res.needConvert ? `（按汇率 ${res.rate} 换算）` : '（人民币 1:1，无需换算）'}` : '';
     const basis = res.convEvents?.length ? ` · 转化口径：${res.convEvents.join('、')}` : '';
-    ElMessage.success({ message: `已同步 ${res.added + res.updated} 天数据（新增 ${res.added}，更新 ${res.updated}）${basis}`, duration: 6000 });
+    ElMessage.success({ message: `已同步 ${res.added + res.updated} 天数据（新增 ${res.added}，更新 ${res.updated}）${cur}${basis}`, duration: 8000 });
     await load();
   } catch (e: any) {
     // 原样展示后端返回的真实错误，便于定位 Token 权限/接口等问题
@@ -203,7 +204,8 @@ async function importCsv() {
   csvImporting.value = true;
   try {
     const res = await api.metaImportCsv({ csv: csvText.value });
-    ElMessage.success(`已导入 ${res.added + res.updated} 天数据`);
+    const cur = res.accountCurrency === 'CNY' ? ' · 人民币账户，按 1:1 直接统计' : ` · 按汇率 ${res.rate} 换算`;
+    ElMessage.success(`已导入 ${res.added + res.updated} 天数据${cur}`);
     csvDialog.value = false; csvText.value = '';
     await load();
   } catch (e: any) { ElMessage.error(e.message || '导入失败'); }

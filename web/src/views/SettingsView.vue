@@ -110,7 +110,10 @@
               <el-form-item label="商务管理 ID（URL 里 business_id=）"><el-input v-model="metaForm.businessId" placeholder="944158525162622" /></el-form-item>
             </div>
             <div class="grid g2">
-              <el-form-item label="美元→人民币汇率"><el-input-number v-model="metaForm.exchangeRate" :min="0.01" :step="0.01" :precision="4" style="width:100%" /></el-form-item>
+              <el-form-item label="外币→人民币汇率">
+                <el-input-number v-model="metaForm.exchangeRate" :min="0.01" :step="0.01" :precision="4" style="width:100%" />
+                <div style="font-size:12px;color:#8a9487;line-height:1.6;margin-top:4px">系统自动读取广告账户结算币种：<b style="color:#d97706">人民币(CNY)账户按 1:1 直接统计，不换算，此项随便填都不影响</b>；只有美元等外币账户才用它换算成人民币。</div>
+              </el-form-item>
               <el-form-item label="转化事件（可选，留空自动识别）"><el-input v-model="metaForm.conversionAction" placeholder="purchase / lead / …" /></el-form-item>
             </div>
           </el-form>
@@ -120,7 +123,7 @@
             <el-tag v-if="metaInfo?.configured" type="success" size="small">已配置</el-tag>
             <el-tag v-else type="warning" size="small">未配置</el-tag>
           </div>
-          <div v-if="metaTestResult" class="help-box">连接正常：{{ metaTestResult.name }} · 币种 {{ metaTestResult.currency }} · 状态 {{ metaTestResult.accountStatus }}</div>
+          <div v-if="metaTestResult" class="help-box">连接正常：{{ metaTestResult.name }} · 币种 {{ metaTestResult.currency }}（{{ metaTestResult.currency === 'CNY' ? '人民币结算，花费按 1:1 直接统计，无需换算' : '外币结算，花费按上方汇率换算成人民币' }}） · 状态 {{ metaTestResult.accountStatus }}</div>
           <div class="help-box">
             <b>怎么拿到这三项</b>
             <ol>
@@ -129,7 +132,7 @@
               <li>把广告账户（ID 见上方 URL 的 <code>act=</code>）授权给该系统用户，权限 <code>查看/读取</code>。</li>
               <li>回到本页填入 Token、广告账户 ID、商务 ID，点保存，再点测试连接。</li>
             </ol>
-            <p>Token 加密存在服务器，不会下发到浏览器；汇率用于把美元花费换算成看板显示的人民币。</p>
+            <p>Token 加密存在服务器，不会下发到浏览器；汇率只在账户为外币结算时用于换算成人民币，人民币账户自动按 1:1 统计。</p>
           </div>
         </div>
       </el-tab-pane>

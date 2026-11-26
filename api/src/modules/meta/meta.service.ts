@@ -304,12 +304,36 @@ export class MetaService {
     return '';
   }
 
-  /** Graph API 同步：按天 upsert 到 ads_daily，按汇率换算成人民币。 */
+  /**
+   * 读取广告账户的结算币种。Meta insights 的 spend 就是该币种的金额，
+   * 因此只有外币账户才需要换算；人民币(CNY)账户按 1:1 直接显示。
+   * 读取失败时回退到「按配置汇率换算」的旧行为，不影响主流程。
+   */
+  private async accountCurrency(c: MetaConfig): Promise<{ currency: string; rate: number; needConvert: boolean }> {
+    const fallback = { currency: 'USD', rate: c.exchangeRate, needConvert: true };
+    try {
+      const url = `${GRAPH}/${normalizeAct(c.accountId)}?fields=currency&access_token=${encodeURIComponent(c.accessToken)}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000) } as any);
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return fallback;
+      const cur = String(data.currency || '').toUpperCase();
+      if (!cur) return fallback;
+      // 人民币结算：spend 已是人民币，不做任何换算
+      if (cur === 'CNY') return { currency: cur, rate: 1, needConvert: false };
+      // 其它外币：使用配置的「该币种→人民币」汇率（界面文案已提示按账户币种填写）
+      return { currency: cur, rate: c.exchangeRate, needConvert: true };
+    } catch {
+      return fallback;
+    }
+  }
+
+  /** Graph API 同步：按天 upsert 到 ads_daily，按账户结算币种决定是否换算成人民币。 */
   async sync(body: { since?: string; until?: string }, user: AuthUser, ctx: AuditCtx) {
     const c = await this.cfg();
     if (!c?.accessToken || !c.accountId) throw new BadRequestException('尚未配置 Meta Token 或广告账户 ID，请先到「系统设置 → Meta 投流」配置');
     const until = body.until || new Date().toISOString().slice(0, 10);
     const since = body.since || new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+    const acct = await this.accountCurrency(c);
     let rows: any[];
     try {
       rows = await this.fetchInsights(c, since, until);
@@ -338,8 +362,8 @@ export class MetaService {
       if (pick.event) convEvents.add(`${pick.event}（${pick.label}）`);
       const payload = {
         platform: 'meta', date,
-        spend: Number((spendUsd * c.exchangeRate).toFixed(2)),
-        spendUsd, currency: 'USD', exchangeRate: c.exchangeRate,
+        spend: Number((spendUsd * acct.rate).toFixed(2)),
+        spendOriginal: spendUsd, currency: acct.currency, exchangeRate: acct.rate,
         imp: Number(r.impressions) || 0,
         reach: Number(r.reach) || 0,
         clicks: Number(r.clicks) || 0,
@@ -366,7 +390,8 @@ export class MetaService {
     }
     await this.audit.log(`同步 Meta 投流数据 ${added}+${updated} 条`, 'ads', ctx);
     return {
-      ok: true, added, updated, rawRows: rows.length, since, until, rate: c.exchangeRate,
+      ok: true, added, updated, rawRows: rows.length, since, until, rate: acct.rate,
+      accountCurrency: acct.currency, needConvert: acct.needConvert,
       convEvents: [...convEvents], configuredEvent: c.conversionAction || '',
     };
   }
@@ -376,7 +401,16 @@ export class MetaService {
     const text = String(body.csv || '').replace(/^\uFEFF/, '').trim();
     if (!text) throw new BadRequestException('CSV 内容为空');
     const c = await this.cfg();
-    const rate = Number(body.exchangeRate) > 0 ? Number(body.exchangeRate) : (c?.exchangeRate || 7.2);
+    // 与 API 同步一致：先读账户结算币种，人民币账户强制 1:1，避免把已人民币的 CSV 金额再乘汇率。
+    // 用户在弹窗里显式传入汇率时仍以其为准（高级用法）。
+    let rate = Number(body.exchangeRate) > 0 ? Number(body.exchangeRate) : 0;
+    let acctCurrency = '';
+    if (c?.accessToken && c?.accountId) {
+      const acct = await this.accountCurrency(c);
+      acctCurrency = acct.currency;
+      if (!rate) rate = acct.rate;
+    }
+    if (!rate) rate = c?.exchangeRate || 7.2;
     const lines = parseCsv(text);
     if (lines.length < 2) throw new BadRequestException('CSV 至少需要表头和一行数据');
     const head = lines[0].map((h) => normalizeHeader(h));
@@ -416,7 +450,7 @@ export class MetaService {
     for (const [date, v] of agg.entries()) {
       const payload = {
         platform: 'meta', date,
-        spend: Number((v.spend * rate).toFixed(2)), spendUsd: v.spend, currency: 'USD', exchangeRate: rate,
+        spend: Number((v.spend * rate).toFixed(2)), spendOriginal: v.spend, currency: acctCurrency || 'USD', exchangeRate: rate,
         imp: v.imp, reach: v.reach, clicks: v.clicks, conv: v.conv,
         countries: [...v.countries.entries()].map(([k, s]) => `${k}:${(v.conv * 520 / (s || 1)).toFixed(1)}`).slice(0, 8).join(', '),
         costPerResult: v.conv ? Number((v.spend / v.conv).toFixed(2)) : 0,
@@ -436,7 +470,7 @@ export class MetaService {
       }
     }
     await this.audit.log(`导入 Meta CSV ${added}+${updated} 天`, 'ads', ctx);
-    return { ok: true, added, updated, days: agg.size, rate };
+    return { ok: true, added, updated, days: agg.size, rate, accountCurrency: acctCurrency || 'USD' };
   }
 }
 
