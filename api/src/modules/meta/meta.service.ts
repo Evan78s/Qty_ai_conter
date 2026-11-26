@@ -17,7 +17,10 @@ interface MetaConfig {
   accountId: string;
   exchangeRate: number;
   conversionAction: string;
+  /** 客单价（元）：仅在看板没有真实成交数据时用于 ROAS 估算 */
+  aov: number;
 }
+const DEFAULT_AOV = 400;
 
 function normalizeAct(id: string) {
   const s = String(id || '').trim().replace(/^act_/i, '');
@@ -98,6 +101,7 @@ export class MetaService {
         accountId: row.accountId || '',
         exchangeRate: Number(o.exchangeRate) > 0 ? Number(o.exchangeRate) : 7.2,
         conversionAction: o.conversionAction || '',
+        aov: Number(o.aov) > 0 ? Number(o.aov) : DEFAULT_AOV,
       };
     } catch {
       return null;
@@ -115,13 +119,14 @@ export class MetaService {
       accountId: c?.accountId || row?.accountId || '',
       exchangeRate: c?.exchangeRate ?? 7.2,
       conversionAction: c?.conversionAction || '',
+      aov: c?.aov ?? DEFAULT_AOV,
       updatedAt: row?.createdAt || 0,
     };
   }
 
   async saveConfig(body: {
     accessToken?: string; businessId?: string; accountId?: string;
-    exchangeRate?: number | string; conversionAction?: string;
+    exchangeRate?: number | string; conversionAction?: string; aov?: number | string;
   }, user: AuthUser, ctx: AuditCtx) {
     if (!user.isSuper) throw new BadRequestException('仅总管理员可修改 Meta 投流配置');
     const accountId = String(body.accountId || '').trim().replace(/^act_/i, '');
@@ -132,10 +137,13 @@ export class MetaService {
     const old = await this.cfg();
     const token = String(body.accessToken || '').trim() || old?.accessToken || '';
     if (!token) throw new BadRequestException('请填写 Meta Access Token');
+    const aovNum = Number(body.aov);
+    const aov = Number.isFinite(aovNum) && aovNum > 0 ? aovNum : (old?.aov || DEFAULT_AOV);
     const enc = encrypt(JSON.stringify({
       accessToken: token,
       exchangeRate: rate,
       conversionAction: String(body.conversionAction || '').trim(),
+      aov,
     }));
     const patch: any = {
       appId: String(body.businessId || '').trim(),

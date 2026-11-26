@@ -116,6 +116,12 @@
               </el-form-item>
               <el-form-item label="转化事件（可选，留空自动识别）"><el-input v-model="metaForm.conversionAction" placeholder="purchase / lead / …" /></el-form-item>
             </div>
+            <div class="grid g2">
+              <el-form-item label="客单价（¥）">
+                <el-input-number v-model="metaForm.aov" :min="1" :step="10" :precision="2" style="width:100%" />
+                <div style="font-size:12px;color:#8a9487;line-height:1.6;margin-top:4px">真实客单价（如 400）。<b style="color:#d97706">看板有真实成交数据时，ROAS 直接用成交额算；没有成交数据时才用「转化 × 客单价」估算</b>。建议在「AI 客服接待 → 成交记录」录入真实成交。</div>
+              </el-form-item>
+            </div>
           </el-form>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <el-button type="primary" :loading="metaSaving" @click="saveMeta">保存配置</el-button>
@@ -240,7 +246,7 @@ const bindings = ref<any[]>([]);
 const storeList = ref<any[]>([]);
 const brandForm = reactive<any>({ platformName: '', logoUrl: '', logoText: '', subtitle: '' });
 const dbInfo = ref<any>(null);
-const metaForm = reactive<any>({ accessToken: '', accountId: '', businessId: '', exchangeRate: 7.2, conversionAction: '' });
+const metaForm = reactive<any>({ accessToken: '', accountId: '', businessId: '', exchangeRate: 7.2, conversionAction: '', aov: 400 });
 const metaInfo = ref<any>(null);
 const metaSaving = ref(false); const metaTesting = ref(false); const metaTestResult = ref<any>(null);
 
@@ -260,6 +266,7 @@ async function load() {
     Object.assign(metaForm, {
       accountId: m?.accountId || '', businessId: m?.businessId || '',
       exchangeRate: m?.exchangeRate || 7.2, conversionAction: m?.conversionAction || '',
+      aov: m?.aov || 400,
     });
   } catch (e: any) { ElMessage.error(e.message || '加载失败'); }
   finally { loading.value = false; }

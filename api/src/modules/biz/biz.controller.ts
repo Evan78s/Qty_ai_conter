@@ -17,7 +17,7 @@ import { PERM } from '../../common/constants';
  * biz_type 决定模块归属与所需权限；store_id 支持门店隔离（'' = 公司级，仅超管可写）。
  */
 const TYPE_MODULE: Record<string, string> = {
-  kb: 'service', service_reply: 'service', service_queue: 'service', push_config: 'service',
+  kb: 'service', service_reply: 'service', service_queue: 'service', push_config: 'service', service_deal: 'service',
   reconcile: 'reconcile', price: 'store', material: 'social',
   social_post: 'social', social_reply: 'social', social_account: 'social',
   ads_account: 'ads', ads_daily: 'ads',
