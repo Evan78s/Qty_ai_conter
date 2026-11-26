@@ -2,7 +2,9 @@
   <div>
     <div class="page-head">
       <div><div class="page-title">境外推广看板</div><div class="page-desc">Meta 与 Google Ads 投流数据 · 录入真实数据后自动统计</div></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap"><el-radio-group v-model="platform"><el-radio-button value="meta">Meta</el-radio-button><el-radio-button value="google">Google Ads</el-radio-button></el-radio-group><template v-if="platform==='meta'"><el-button :loading="syncing" @click="syncMeta">从 Meta 同步</el-button><el-button @click="csvDialog=true">导入 CSV</el-button><el-button :loading="probeLoading" @click="probeMeta">诊断 Meta</el-button></template><el-button @click="entryDialog=true">+ 录入数据</el-button><el-button type="primary" @click="runAi"><el-icon><Sparkles /></el-icon>AI 分析</el-button></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><el-radio-group v-model="platform"><el-radio-button value="meta">Meta</el-radio-button><el-radio-button value="google">Google Ads</el-radio-button></el-radio-group><template v-if="platform==='meta'">
+        <el-date-picker v-model="syncRange" type="daterange" value-format="YYYY-MM-DD" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" size="default" style="width:250px" />
+        <el-button :loading="syncing" @click="openSync">从 Meta 同步</el-button><el-button @click="csvDialog=true">导入 CSV</el-button><el-button :loading="probeLoading" @click="probeMeta">诊断 Meta</el-button></template><el-button @click="entryDialog=true">+ 录入数据</el-button><el-button type="primary" @click="runAi"><el-icon><Sparkles /></el-icon>AI 分析</el-button></div>
     </div>
     <div class="grid g4">
       <div v-for="k in kpis" :key="k.lb" class="card kpi"><div class="top"><span class="lb">{{ k.lb }}</span><span class="ic">{{ k.ic }}</span></div><div class="val num">{{ k.v }}</div><div class="ft"><span class="chip flat">{{ k.ft }}</span></div></div>
@@ -84,6 +86,8 @@ import { useChart, axis } from '../composables';
 const platform = ref('meta'); const aiOpen = ref(false); const aiLoading = ref(false); const aiResult = ref('');
 const allRows = ref<any[]>([]); const entryDialog = ref(false);
 const syncing = ref(false); const csvDialog = ref(false); const csvText = ref(''); const csvImporting = ref(false);
+// 同步区间：默认近 29 天；选更早的日期可覆盖历史遗留的脏数据行
+const syncRange = ref<string[]>([new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10), new Date().toISOString().slice(0, 10)]);
 const probeDialog = ref(false); const probeLoading = ref(false); const probeResult = ref<any>(null);
 const entry = ref<any>({ date: new Date().toISOString().slice(0, 10), spend: 0, imp: 0, clicks: 0, conv: 0, countries: '' });
 const trendEl = ref<HTMLElement | null>(null); const funnelEl = ref<HTMLElement | null>(null);
@@ -166,10 +170,14 @@ async function load() {
 onMounted(load);
 watch(platform, () => nextTick(renderCharts));
 
-async function syncMeta() {
+async function openSync() {
+  if (!syncRange.value || syncRange.value.length !== 2) return ElMessage.warning('请选择同步的起止日期');
+  await syncMeta(syncRange.value[0], syncRange.value[1]);
+}
+async function syncMeta(since?: string, until?: string) {
   syncing.value = true;
   try {
-    const res = await api.metaSync({});
+    const res = await api.metaSync(since && until ? { since, until } : {});
     const basis = res.convEvents?.length ? ` · 转化口径：${res.convEvents.join('、')}` : '';
     ElMessage.success({ message: `已同步 ${res.added + res.updated} 天数据（新增 ${res.added}，更新 ${res.updated}）${basis}`, duration: 6000 });
     await load();

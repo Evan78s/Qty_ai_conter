@@ -212,12 +212,17 @@ export class MetaService {
       level: 'account', time_increment: '1', time_range: JSON.stringify({ since, until }),
       fields: 'date_start,spend,impressions,reach,clicks,actions', limit: '5', access_token: token,
     }).toString();
+    const insightCountry = `${GRAPH}/${act}/insights?` + new URLSearchParams({
+      level: 'account', breakdowns: 'country', time_range: JSON.stringify({ since, until }),
+      fields: 'country,spend,clicks,actions', limit: '5', access_token: token,
+    }).toString();
 
     const checks = await Promise.all([
       call('账户信息', accountUrl),
       call('insights-最简(无time_increment/无字段)', insightBase),
       call('insights-按天(基础字段)', insightMinimal),
       call('insights-按天(含reach/actions)', insightFull),
+      call('insights-按国家(breakdowns=country)', insightCountry),
     ]);
     // 从含 actions 的样本里直接算出转化口径，诊断时一眼可见「转化到底取的哪个事件」
     const fullCheck = checks.find((c) => c.label.includes('actions'));
@@ -254,33 +259,46 @@ export class MetaService {
     return out;
   }
 
-  /** 按国家取花费与转化，供「投放国家/地区表现」使用；失败不影响主流程。 */
+  /**
+   * 按国家取花费与转化，供「投放国家/地区表现」使用；失败不影响主流程。
+   * 不同账户对 breakdowns=country 的字段组合支持不一，逐套尝试直到拿到数据。
+   */
   private async fetchCountries(c: MetaConfig, since: string, until: string): Promise<string> {
-    try {
-      const url = `${GRAPH}/${normalizeAct(c.accountId)}/insights?` + new URLSearchParams({
-        level: 'account', breakdowns: 'country',
-        time_range: JSON.stringify({ since, until }),
-        fields: 'country,spend,clicks,actions',
-        limit: '500', access_token: c.accessToken,
-      }).toString();
-      const res = await fetch(url, { signal: AbortSignal.timeout(60000) } as any);
-      const data: any = await res.json().catch(() => ({}));
-      if (!res.ok) return '';
-      const map = new Map<string, { spend: number; conv: number }>();
-      for (const r of (data.data || [])) {
-        const k = String(r.country || '其他');
-        const v = map.get(k) || { spend: 0, conv: 0 };
-        v.spend += Number(r.spend) || 0;
-        v.conv += pickConversions(r.actions, c.conversionAction).conv;
-        map.set(k, v);
-      }
-      return [...map.entries()]
-        .filter(([, v]) => v.spend > 0)
-        .map(([k, v]) => `${k}:${(v.conv * 520 / v.spend).toFixed(1)}`)
-        .slice(0, 8).join(', ');
-    } catch {
-      return '';
+    const base: any = {
+      level: 'account', breakdowns: 'country',
+      time_range: JSON.stringify({ since, until }),
+      limit: '500', access_token: c.accessToken,
+    };
+    const variants = [
+      { ...base, fields: 'country,spend,clicks,actions' },
+      { ...base, fields: 'country,spend,impressions,clicks' },
+      { ...base, fields: 'country,spend', time_increment: '1' },
+      { ...base, fields: 'country,spend' },
+    ];
+    for (const params of variants) {
+      try {
+        const url = `${GRAPH}/${normalizeAct(c.accountId)}/insights?` + new URLSearchParams(params).toString();
+        const res = await fetch(url, { signal: AbortSignal.timeout(60000) } as any);
+        const data: any = await res.json().catch(() => ({}));
+        if (!res.ok) continue;
+        const list = Array.isArray(data?.data) ? data.data : [];
+        if (!list.length) continue;
+        const map = new Map<string, { spend: number; conv: number }>();
+        for (const r of list) {
+          const k = String(r.country || '其他');
+          const v = map.get(k) || { spend: 0, conv: 0 };
+          v.spend += Number(r.spend) || 0;
+          v.conv += pickConversions(r.actions, c.conversionAction).conv;
+          map.set(k, v);
+        }
+        const out = [...map.entries()]
+          .filter(([, v]) => v.spend > 0)
+          .map(([k, v]) => `${k}:${(v.conv * 520 / v.spend).toFixed(1)}`)
+          .slice(0, 8).join(', ');
+        if (out) return out;
+      } catch { /* 尝试下一套 */ }
     }
+    return '';
   }
 
   /** Graph API 同步：按天 upsert 到 ads_daily，按汇率换算成人民币。 */

@@ -1,7 +1,9 @@
 # 鵲太醫 AI 运营工作台（连锁店版）· Docker 一键部署（最简单）
 
-> 一整套系统（前端 + 后端 + MySQL）打包成 Docker 容器，**一条命令全自动安装**。一套系统管理你连锁旗下所有分店。
+> 一整套系统（前端 + 后端 + MySQL）打包成 Docker 容器，**一条命令全自动安装**。一套系统管理你连锁旗下所有分店。  
 > 不用手动建库、不用配 Nginx、不用配 systemd。数据库和密钥自动持久化，升级不影响数据。
+
+
 
 ---
 
@@ -15,13 +17,14 @@ curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker
 
 > 之所以先下载到 `/tmp` 再执行，而不是 `sudo bash <(curl ...)`：后者在部分系统会因 sudo 不转发 `/dev/fd/63` 而报 `No such file or directory`。这种方式任何 Linux 都通用。
 
-它会自动：**装 Docker → 拉源码 → 问 3 个问题 → 起容器 → 建表建管理员 → 输出网址和账号密码**。
+它会自动：**装 Docker → 拉源码 → 问 3 个问题 → 起容器 → 建表建管理员 → 输出网址和账号密码**。  
 3 个问题分别是：对外端口（默认 80）、管理员账号（默认 admin）、管理员密码（≥8 位，留空随机生成）。
 
-> 🔑 **密码含特殊字符 / 数字输不进去怎么办？**
+> 🔑 **密码含特殊字符 / 数字输不进去怎么办？**  
 > 部分 SSH 终端在密码输入时数字小键盘或特殊字符（`@ # ! $` 等）会输入异常。两种解决办法：
 >
 > **办法一（推荐）**：用环境变量直接把密码写进命令，绕过交互输入。把 `你的密码` 换成实际密码（用**单引号**包住，里面的单引号用 `'\''` 表示）：
+>
 > ```bash
 > curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker/boot.sh -o /tmp/qty-boot.sh && sudo ADMIN_PASSWORD='你的密码' bash /tmp/qty-boot.sh
 > ```
@@ -41,10 +44,11 @@ curl -fsSL https://raw.githubusercontent.com/Evan78s/Qty_ai_conter/master/docker
 ============================================
 ```
 
-> ⚠️ **这条命令要求仓库是「公开」的**（代码无敏感信息，密码配置 `install.json`/`.env` 均未入库）。
+> ⚠️ **这条命令要求仓库是「公开」的**（代码无敏感信息，密码配置 `install.json`/`.env` 均未入库）。  
 > 当前仓库已设为公开，可直接执行上面的命令。若日后改回私有，用下面「方式 B：私有仓库」的带令牌命令。
 
 <details>
+
 <summary><b>方式 B：保持私有仓库（用只读令牌，仍是一条命令）</b></summary>
 
 1. 到 GitHub → 头像 → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token，只勾 `repo` 下的 `public_repo` 对私有库无效，需勾 **`repo`（完整）** 或用细粒度令牌只给这一个仓库的 **Contents: Read** 权限。生成后复制令牌（只显示一次）。
@@ -139,11 +143,11 @@ bash docker/install.sh
 
 系统已内置 PWA，客户不用去应用商店、不用下载安装包：
 
-| 设备 | 操作 |
-|---|---|
-| **安卓手机** | Chrome 打开网址 → 菜单 → 「添加到主屏幕 / 安装应用」，桌面出现图标，点开全屏使用 |
-| **iPhone/iPad** | Safari 打开网址 → 分享按钮 → 「添加到主屏幕」 |
-| **电脑（Win/Mac）** | Chrome/Edge 地址栏右侧的「安装」图标 → 安装，桌面/程序坞出现图标 |
+| 设备              | 操作                                               |
+| --------------- | ------------------------------------------------ |
+| **安卓手机**        | Chrome 打开网址 → 菜单 → 「添加到主屏幕 / 安装应用」，桌面出现图标，点开全屏使用 |
+| **iPhone/iPad** | Safari 打开网址 → 分享按钮 → 「添加到主屏幕」                    |
+| **电脑（Win/Mac）** | Chrome/Edge 地址栏右侧的「安装」图标 → 安装，桌面/程序坞出现图标         |
 
 装完后就像原生 App：独立窗口、全屏、有图标，且**每次打开都是最新版**（升级无需客户更新）。
 
@@ -218,11 +222,11 @@ docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
 
 ## 数据存在哪（都在卷里，删容器不丢）
 
-| 数据 | 位置 |
-|---|---|
-| MySQL 系统库 | Docker 卷 `mysql-data` |
-| 安装配置 + 密钥 | Docker 卷 `api-data` → `/app/data/install.json` |
-| 飞书凭证 / 品牌 / 审计 | 都在上面的 MySQL 库里 |
+| 数据             | 位置                                             |
+| -------------- | ---------------------------------------------- |
+| MySQL 系统库      | Docker 卷 `mysql-data`                          |
+| 安装配置 + 密钥      | Docker 卷 `api-data` → `/app/data/install.json` |
+| 飞书凭证 / 品牌 / 审计 | 都在上面的 MySQL 库里                                 |
 
 ⚠️ 备份时**必须包含 `install.json`**——里面的 3 个密钥丢失后所有加密数据无法解开，不可逆。
 
@@ -249,8 +253,11 @@ cd /www/docker/qtyai && git pull && sudo HTTP_PORT=8080 bash docker/install.sh
 
 脚本会自动：检测到 `docker/.env` 已存在 → **复用原来生成的密码和数据库配置（不会重新生成，数据不丢）** → 把端口改成 8080 → 重启容器 → 接着完成初始化。
 
-> 若不确定该用哪个端口，先看看谁占了 80：`ss -ltnp | grep ':80'`。
-> 8080 也被占用的话换 8081、8090 等任意空闲端口，把上面命令里的 `8080` 换掉即可。
+|   |   |
+| - | - |
+
+> 若不确定该用哪个端口，先看看谁占了 80：`ss -ltnp | grep ':80'`。  
+> 8080 也被占用的话换 8081、8090 等任意空闲端口，把上面命令里的 `8080` 换掉即可。  
 > 脚本也支持自动避让：直接 `bash docker/install.sh` 时若 80 被占用会默认选一个空闲端口。
 
 装完后浏览器访问 `http://服务器IP:8080`（**要带端口号**）。首次安装若中断在起容器那一步，用上面的命令续装即可完成建表和管理员创建。
@@ -259,12 +266,12 @@ cd /www/docker/qtyai && git pull && sudo HTTP_PORT=8080 bash docker/install.sh
 
 ### 其他问题
 
-| 现象 | 排查 |
-|---|---|
-| `install.sh` 提示无 Docker | 先执行前提里的安装命令 |
-| 拉代码 Permission denied | Deploy key 没加或没生效；`ssh -T qty-github` 重测 |
-| 端口被占用 | 见上面「80 端口被占用」一节，用 `HTTP_PORT=8080` 续装 |
-| 初始化失败 | `docker compose -f docker/docker-compose.yml logs api` 看日志 |
-| 打不开网页 | `docker compose -f docker/docker-compose.yml ps` 确认 web 容器在跑 |
-| 忘记管理员密码 | 见 `docker/.env` 的 ADMIN_PASSWORD；还没有就需删卷重装（会丢数据） |
-| 各端没有"安装"选项 | 用 HTTPS 域名访问（HTTP+IP 浏览器不给装） |
+| 现象                      | 排查                                                           |
+| ----------------------- | ------------------------------------------------------------ |
+| `install.sh` 提示无 Docker | 先执行前提里的安装命令                                                  |
+| 拉代码 Permission denied   | Deploy key 没加或没生效；`ssh -T qty-github` 重测                     |
+| 端口被占用                   | 见上面「80 端口被占用」一节，用 `HTTP_PORT=8080` 续装                        |
+| 初始化失败                   | `docker compose -f docker/docker-compose.yml logs api` 看日志   |
+| 打不开网页                   | `docker compose -f docker/docker-compose.yml ps` 确认 web 容器在跑 |
+| 忘记管理员密码                 | 见 `docker/.env` 的 ADMIN_PASSWORD；还没有就需删卷重装（会丢数据）             |
+| 各端没有"安装"选项              | 用 HTTPS 域名访问（HTTP+IP 浏览器不给装）                                 |
