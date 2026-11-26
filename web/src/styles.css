@@ -68,6 +68,7 @@ body{font-family:"PingFang SC","Microsoft YaHei",-apple-system,sans-serif;backgr
 .card-h h3{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
 .card-b{padding:18px}
 .grid{display:grid;gap:16px}
+.g5{grid-template-columns:repeat(5,1fr)}
 .g4{grid-template-columns:repeat(4,1fr)}
 .g3{grid-template-columns:repeat(3,1fr)}
 .g2{grid-template-columns:repeat(2,1fr)}
@@ -110,6 +111,7 @@ body{font-family:"PingFang SC","Microsoft YaHei",-apple-system,sans-serif;backgr
 .m-row{display:flex;gap:8px;margin-bottom:8px}
 .m-row>*{flex:1}
 
+@media(max-width:1400px){.g5{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:1200px){.g4{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:1024px){
   .sidebar{transform:translateX(-100%)}
@@ -121,7 +123,7 @@ body{font-family:"PingFang SC","Microsoft YaHei",-apple-system,sans-serif;backgr
 @media(max-width:760px){
   .content{padding:16px 14px 50px}
   .topbar{padding:0 14px}
-  .g4,.g3,.g2{grid-template-columns:1fr}
+  .g5,.g4,.g3,.g2{grid-template-columns:1fr}
   .page-title{font-size:19px}
   .top-select{display:none}
 }

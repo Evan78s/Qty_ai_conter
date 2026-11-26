@@ -5,9 +5,9 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><el-radio-group v-model="platform"><el-radio-button value="meta">Meta</el-radio-button><el-radio-button value="google">Google Ads</el-radio-button></el-radio-group><template v-if="platform==='meta'">
         <el-date-picker v-model="syncRange" type="daterange" value-format="YYYY-MM-DD" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" size="default" style="width:250px" />
         <el-button size="small" text @click="resetRange">看全部</el-button>
-        <el-button :loading="syncing" @click="openSync">从 Meta 同步</el-button><el-button @click="csvDialog=true">导入 CSV</el-button><el-button :loading="probeLoading" @click="probeMeta">诊断 Meta</el-button></template><el-button @click="entryDialog=true">+ 录入数据</el-button><el-button type="primary" @click="runAi"><el-icon><Sparkles /></el-icon>AI 分析</el-button></div>
+        <el-button :loading="syncing" @click="openSync">从 Meta 同步</el-button><el-button :loading="campaignLoading" @click="loadCampaigns">广告系列</el-button><el-button @click="csvDialog=true">导入 CSV</el-button><el-button :loading="probeLoading" @click="probeMeta">诊断 Meta</el-button></template><el-button @click="entryDialog=true">+ 录入数据</el-button><el-button type="primary" @click="runAi"><el-icon><Sparkles /></el-icon>AI 分析</el-button></div>
     </div>
-    <div class="grid g4">
+    <div class="grid g5">
       <div v-for="k in kpis" :key="k.lb" class="card kpi"><div class="top"><span class="lb">{{ k.lb }}</span><span class="ic">{{ k.ic }}</span></div><div class="val num">{{ k.v }}</div><div class="ft"><span class="chip flat">{{ k.ft }}</span></div></div>
     </div>
     <div class="grid g2" style="margin-top:16px">
@@ -19,16 +19,31 @@
     </div>
     <div class="grid g2" style="margin-top:16px">
       <div class="card"><div class="card-h"><h3>投流数据明细</h3><el-button size="small" text type="danger" @click="clearAll">清空</el-button></div><div class="card-b" style="padding:0">
-        <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['日期','花费','曝光','点击','转化','成交额','ROAS','ROAS口径','转化事件']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
-          <tr v-for="s in rows" :key="s.id"><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{s.payload?.date}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">¥{{s.payload?.spend}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(s.payload?.imp)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(s.payload?.clicks)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{s.payload?.conv}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600" :style="dealOf(s)>0?'color:var(--up)':'color:var(--ink2)'">{{ dealOf(s)>0 ? '¥'+fmt(dealOf(s)) : '—' }}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><span class="chip" :class="roas(s)>=3.5?'up':roas(s)<2.5?'down':'flat'">{{roas(s)}}</span></td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-size:12px"><span class="tag" :class="roasReal(s)?'g':'gray'">{{ roasReal(s)?'真实成交':'估算' }}</span></td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);color:var(--ink2);font-size:12px">{{ s.payload?.convLabel || (s.payload?.source==='api'?'—':'手动') }}</td></tr>
+        <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['日期','花费','曝光','点击','转化','单次成效CPA','成交额','ROAS','ROAS口径','转化事件']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
+          <tr v-for="s in rows" :key="s.id"><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{s.payload?.date}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">¥{{s.payload?.spend}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(s.payload?.imp)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(s.payload?.clicks)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{s.payload?.conv}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600">¥{{cpaOf(s)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600" :style="dealOf(s)>0?'color:var(--up)':'color:var(--ink2)'">{{ dealOf(s)>0 ? '¥'+fmt(dealOf(s)) : '—' }}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)"><span class="chip" :class="roas(s)>=3.5?'up':roas(s)<2.5?'down':'flat'">{{roas(s)}}</span></td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-size:12px"><span class="tag" :class="roasReal(s)?'g':'gray'">{{ roasReal(s)?'真实成交':'估算' }}</span></td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);color:var(--ink2);font-size:12px">{{ s.payload?.convLabel || (s.payload?.source==='api'?'—':'手动') }}</td></tr>
         </tbody></table>
         <div v-if="!rows.length" style="padding:24px;text-align:center;color:var(--ink2)">暂无 {{platform==='meta'?'Meta':'Google Ads'}} 数据。</div>
       </div></div>
       <div class="card"><div class="card-h"><h3>转化漏斗</h3></div><div class="card-b"><div ref="funnelEl" class="chart"></div></div></div>
     </div>
+
+    <!-- 广告系列表现（Meta 实时拉取，按系列显示） -->
+    <div class="card" style="margin-top:16px" v-if="platform==='meta'"><div class="card-h">
+      <h3>广告系列表现 <span class="page-desc">Meta 全部广告系列 · 按花费排序</span></h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span v-if="campaignMeta" class="page-desc">{{campaignMeta.since}} ~ {{campaignMeta.until}} · {{campaignMeta.accountCurrency}} · {{campaigns.length}} 个系列</span>
+        <el-button size="small" :loading="campaignLoading" @click="loadCampaigns">刷新系列数据</el-button>
+      </div>
+    </div><div class="card-b" style="padding:0">
+      <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['广告系列','花费','曝光','覆盖','点击','转化','单次成效CPA','千次曝光CPM']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
+        <tr v-for="c in campaigns" :key="c.campaignId || c.name"><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600;max-width:300px">{{c.name || ('系列 '+c.campaignId)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600">¥{{c.spend}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(c.imp)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(c.reach)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(c.clicks)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{c.conv}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600">¥{{c.cpa}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">¥{{c.cpm}}</td></tr>
+      </tbody></table>
+      <div v-if="!campaigns.length" style="padding:24px;text-align:center;color:var(--ink2)">{{ campaignMsg || '暂无广告系列数据，点「广告系列」按钮从 Meta 拉取。' }}</div>
+    </div></div>
+
     <div class="mini-note">
       <b>日期范围</b>：选择后下方 KPI/图表/明细即时筛选只显示该区间数据，点「看全部」恢复全部；点「从 Meta 同步」则按该范围拉取数据。<br>
-      Meta 数据来自官方 Graph API 同步（人民币账户按 1:1 统计，外币按汇率换算）。<b>ROAS 口径：{{ roasBasis }}</b>——在「AI 客服接待 → 成交记录」录入真实成交后，ROAS 自动改为「当日成交额 ÷ 当日花费」；未录入成交的日期用「转化 × 客单价 ¥{{aov}}」估算（客单价可在「系统设置 → Meta 投流 → 客单价」修改）。「转化」只统计真实转化事件（购买/线索/私信咨询），已剔除互动噪音。Google Ads 暂为手动录入。AI 分析需先在「AI 模型与密钥」配置 Key。
+      Meta 数据来自官方 Graph API 同步（人民币账户按 1:1 统计，外币按汇率换算）。<b>单次成效费用 CPA = 花费 ÷ 转化</b>，花费越低/转化越高则 CPA 越优。<b>ROAS 口径：{{ roasBasis }}</b>——在「AI 客服接待 → 成交记录」录入真实成交后，ROAS 自动改为「当日成交额 ÷ 当日花费」；未录入成交的日期用「转化 × 客单价 ¥{{aov}}」估算（客单价可在「系统设置 → Meta 投流 → 客单价」修改）。「转化」只统计真实转化事件（购买/线索/私信咨询），已剔除互动噪音。「广告系列」按 Meta 当前日期范围实时拉取全部系列，不在本地留副本。Google Ads 暂为手动录入。AI 分析需先在「AI 模型与密钥」配置 Key。
     </div>
 
     <el-dialog v-model="csvDialog" title="导入 Meta 广告 CSV" width="560px">
@@ -120,6 +135,9 @@ const dealByDate = computed(() => {
 const hasDealData = computed(() => scopedDeals.value.length > 0);
 const totalDealAmount = computed(() => scopedDeals.value.reduce((s, d) => s + (Number(d.payload?.amount) || 0), 0));
 const probeDialog = ref(false); const probeLoading = ref(false); const probeResult = ref<any>(null);
+// 广告系列表现（Meta 实时拉取）
+const campaigns = ref<any[]>([]); const campaignMeta = ref<any>(null);
+const campaignLoading = ref(false); const campaignMsg = ref('');
 const entry = ref<any>({ date: new Date().toISOString().slice(0, 10), spend: 0, imp: 0, clicks: 0, conv: 0, countries: '' });
 const trendEl = ref<HTMLElement | null>(null); const funnelEl = ref<HTMLElement | null>(null);
 
@@ -134,6 +152,8 @@ const rows = computed(() => allRows.value
 function dealOf(r: any) { return Number(dealByDate.value[String(r.payload?.date || '').slice(0, 10)] || 0); }
 /** 该行是否用真实成交额计算 ROAS */
 function roasReal(r: any) { return dealOf(r) > 0; }
+/** 单次成效费用 CPA = 花费 ÷ 转化（人民币），无转化为 0 */
+function cpaOf(r: any) { const c = Number(r.payload?.conv || 0); const s = Number(r.payload?.spend || 0); return c > 0 ? Number((s / c).toFixed(2)) : 0; }
 /** 单行 ROAS：有真实成交用「成交额/花费」，否则用「转化×客单价/花费」估算 */
 function roas(r: any) {
   const s = Number(r.payload?.spend || 0);
@@ -160,10 +180,12 @@ const kpis = computed(() => {
   const revenue = hasDealData.value && totalDealAmount.value > 0 ? totalDealAmount.value : t.conv * aov.value;
   const roasV = t.spend ? (revenue / t.spend).toFixed(1) : '0';
   const roasLabel = hasDealData.value ? '真实成交额/花费' : `转化×¥${aov.value}估算`;
+  const cpaV = t.conv > 0 ? (t.spend / t.conv).toFixed(2) : '0';
   return [
     { lb: '投流花费', v: '¥' + fmt(t.spend), ic: '💰', ft: `${rows.value.length} 天数据` },
     { lb: hasDealData.value ? '真实成交额' : '曝光量', v: hasDealData.value ? '¥' + fmt(totalDealAmount.value) : fmt(t.imp), ic: hasDealData.value ? '💵' : '🌐', ft: hasDealData.value ? deals.value.length + ' 笔成交' : '累计' },
     { lb: '点击率 CTR', v: ctr + '%', ic: '📈', ft: '转化率 ' + (t.clicks ? (t.conv / t.clicks * 100).toFixed(1) : '0') + '%' },
+    { lb: '单次成效费用 CPA', v: '¥' + cpaV, ic: '🧾', ft: '花费 ÷ 转化' },
     { lb: '转化 / ROAS', v: String(t.conv), ic: '🎯', ft: `ROAS ${roasV}（${roasLabel}）` },
   ];
 });
@@ -262,6 +284,26 @@ async function syncMeta(since?: string, until?: string) {
     // 原样展示后端返回的真实错误，便于定位 Token 权限/接口等问题
     ElMessage.error({ message: String(e?.message || '同步失败'), duration: 8000, showClose: true });
   } finally { syncing.value = false; }
+}
+/** 从 Meta 实时拉取全部广告系列，按当前日期范围（不选则近30天） */
+async function loadCampaigns() {
+  campaignLoading.value = true; campaignMsg.value = '';
+  try {
+    const body = syncRange.value?.length === 2 ? { since: syncRange.value[0], until: syncRange.value[1] } : {};
+    const res = await api.metaCampaigns(body);
+    campaigns.value = res.campaigns || [];
+    campaignMeta.value = res;
+    campaignMsg.value = res.message || '';
+    if (campaigns.value.length) {
+      const cur = res.accountCurrency === 'CNY' ? '人民币1:1' : `汇率${res.rate}`;
+      ElMessage.success({ message: `已拉取 ${campaigns.value.length} 个广告系列（${res.since}~${res.until}，${cur}）`, duration: 6000 });
+    } else {
+      ElMessage.warning({ message: res.message || 'Meta 未返回广告系列数据', duration: 8000 });
+    }
+  } catch (e: any) {
+    campaignMsg.value = String(e?.message || '拉取失败');
+    ElMessage.error({ message: campaignMsg.value, duration: 8000, showClose: true });
+  } finally { campaignLoading.value = false; }
 }
 async function probeMeta() {
   probeDialog.value = true; probeLoading.value = true; probeResult.value = null;

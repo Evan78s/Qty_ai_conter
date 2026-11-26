@@ -269,6 +269,85 @@ export class MetaService {
   }
 
   /**
+   * 按广告系列(campaign)拉取数据，供「广告系列表现」表格使用。
+   * Meta Marketing API 用 level=campaign + fields=campaign_id,campaign_name,... 返回每个系列汇总。
+   * 与按天数据一样：转化走 pickConversions 白名单；花费按账户结算币种换算成人民币。
+   * 多套字段降级尝试，兼容不同 API 版本对 campaign_name 的支持差异。
+   */
+  async fetchCampaigns(since?: string, until?: string) {
+    const c = await this.cfg();
+    if (!c?.accessToken || !c.accountId) throw new BadRequestException('尚未配置 Meta Token 或广告账户 ID');
+    const untilD = until || new Date().toISOString().slice(0, 10);
+    const sinceD = since || new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+    const acct = await this.accountCurrency(c);
+
+    // 字段组合降级：带 campaign_name 优先，退到只有 campaign_id
+    const fieldVariants = [
+      'campaign_id,campaign_name,spend,impressions,reach,clicks,actions',
+      'campaign_id,campaign_name,spend,impressions,clicks,actions',
+      'campaign_id,spend,impressions,clicks,actions',
+      'campaign_id,spend,clicks,actions',
+    ];
+    let list: any[] = [];
+    let lastErr = '';
+    for (const fields of fieldVariants) {
+      try {
+        const url = `${GRAPH}/${normalizeAct(c.accountId)}/insights?` + new URLSearchParams({
+          level: 'campaign',
+          time_range: JSON.stringify({ since: sinceD, until: untilD }),
+          fields,
+          limit: '500',
+          access_token: c.accessToken,
+        }).toString();
+        const res = await fetch(url, { signal: AbortSignal.timeout(60000) } as any);
+        const data: any = await res.json().catch(() => ({}));
+        if (!res.ok) { lastErr = data?.error?.message || `HTTP ${res.status}`; continue; }
+        list = Array.isArray(data?.data) ? data.data : [];
+        if (list.length) break;
+      } catch (e: any) { lastErr = e?.message || String(e); }
+    }
+
+    // 按 campaign_id 聚合（API 通常已按系列汇总，这里兜底合并同名/分页的重复项）
+    const map = new Map<string, any>();
+    const convEvents = new Set<string>();
+    for (const r of list) {
+      const id = String(r.campaign_id || r.id || '').trim();
+      const key = id || String(r.campaign_name || '未知系列');
+      const v = map.get(key) || {
+        campaignId: id, name: String(r.campaign_name || r.name || ''),
+        spend: 0, imp: 0, reach: 0, clicks: 0, conv: 0,
+      };
+      const spendOrig = Number(r.spend) || 0;
+      v.spend += spendOrig * acct.rate;
+      v.imp += Number(r.impressions) || 0;
+      v.reach += Number(r.reach) || 0;
+      v.clicks += Number(r.clicks) || 0;
+      const pick = pickConversions(r.actions, c.conversionAction);
+      v.conv += pick.conv;
+      if (pick.event) convEvents.add(`${pick.event}（${pick.label}）`);
+      if (!v.name && r.campaign_name) v.name = String(r.campaign_name);
+      map.set(key, v);
+    }
+    const campaigns = [...map.values()]
+      .map((v) => ({
+        ...v,
+        spend: Number(v.spend.toFixed(2)),
+        // CPA 单次成效费用 = 花费 ÷ 转化（转化 0 时为 0）
+        cpa: v.conv > 0 ? Number((v.spend / v.conv).toFixed(2)) : 0,
+        // CPM 千次曝光成本 = 花费 ÷ 曝光 × 1000
+        cpm: v.imp > 0 ? Number((v.spend / v.imp * 1000).toFixed(2)) : 0,
+      }))
+      .sort((a, b) => b.spend - a.spend);
+    return {
+      ok: true, since: sinceD, until: untilD,
+      accountCurrency: acct.currency, rate: acct.rate, needConvert: acct.needConvert,
+      campaigns, rawRows: list.length,
+      convEvents: [...convEvents],
+      message: campaigns.length ? '' : `Meta 在 ${sinceD} ~ ${untilD} 未返回广告系列数据${lastErr ? '：' + lastErr : '。可点「诊断 Meta」排查'}。`,
+    };
+  }
+
+  /**
    * 按国家取花费与转化，供「投放国家/地区表现」使用；失败不影响主流程。
    * 不同账户对 breakdowns=country 的字段组合支持不一，逐套尝试直到拿到数据。
    */

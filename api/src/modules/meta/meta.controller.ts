@@ -54,4 +54,12 @@ export class MetaController {
   importCsv(@Req() req: Request, @Body() body: { csv?: string; exchangeRate?: number | string }) {
     return this.meta.importCsv(body, (req as any).authUser as AuthUser, this.ctx(req));
   }
+
+  /** 广告系列表现：按 campaign 维度实时拉取 Meta 数据（不落库）。 */
+  @Post('campaigns')
+  @HttpCode(200)
+  @RequirePerm('ads', PERM.VIEW)
+  campaigns(@Req() req: Request, @Body() body: { since?: string; until?: string }) {
+    return this.meta.fetchCampaigns(body?.since, body?.until);
+  }
 }

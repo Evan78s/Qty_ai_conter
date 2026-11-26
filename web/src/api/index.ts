@@ -215,6 +215,7 @@ export const api = {
   metaTest: () => raw('/meta/test', { method: 'POST', body: '{}' }),
   metaProbe: () => raw('/meta/probe', { method: 'POST', body: '{}' }),
   metaSync: (body: { since?: string; until?: string } = {}) => raw('/meta/sync', { method: 'POST', body: JSON.stringify(body) }),
+  metaCampaigns: (body: { since?: string; until?: string } = {}) => raw('/meta/campaigns', { method: 'POST', body: JSON.stringify(body) }),
   metaImportCsv: (body: { csv: string; exchangeRate?: number }) => raw('/meta/import', { method: 'POST', body: JSON.stringify(body) }),
   // 每日对账：飞书「门店每日台账」+ Agent 核对
   reconcileTables: (storeId = 'all') => raw(`/reconcile/tables?storeId=${encodeURIComponent(storeId)}`),
