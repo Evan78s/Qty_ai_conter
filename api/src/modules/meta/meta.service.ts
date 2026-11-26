@@ -214,7 +214,8 @@ export class MetaService {
     }).toString();
     const insightCountry = `${GRAPH}/${act}/insights?` + new URLSearchParams({
       level: 'account', breakdowns: 'country', time_range: JSON.stringify({ since, until }),
-      fields: 'country,spend,clicks,actions', limit: '5', access_token: token,
+      // country 由 breakdowns 返回，不能写进 fields（新版 API 会报 #100）
+      fields: 'spend,clicks,actions', limit: '5', access_token: token,
     }).toString();
 
     const checks = await Promise.all([
@@ -269,11 +270,13 @@ export class MetaService {
       time_range: JSON.stringify({ since, until }),
       limit: '500', access_token: c.accessToken,
     };
+    // 关键：新版 Graph API 下 country 由 breakdowns 返回，不能再写进 fields，
+    // 否则报 "(#100) country is not valid for fields param"。fields 里只放指标。
     const variants = [
-      { ...base, fields: 'country,spend,clicks,actions' },
-      { ...base, fields: 'country,spend,impressions,clicks' },
-      { ...base, fields: 'country,spend', time_increment: '1' },
-      { ...base, fields: 'country,spend' },
+      { ...base, fields: 'spend,clicks,actions' },
+      { ...base, fields: 'spend,impressions,clicks' },
+      { ...base, fields: 'spend', time_increment: '1' },
+      { ...base, fields: 'spend' },
     ];
     for (const params of variants) {
       try {
