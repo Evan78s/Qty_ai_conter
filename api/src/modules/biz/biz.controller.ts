@@ -24,6 +24,18 @@ const TYPE_MODULE: Record<string, string> = {
 };
 function moduleOf(type: string): string { return TYPE_MODULE[type] || 'system'; }
 
+/**
+ * payload 在库里是 text 列、存的是 JSON 字符串；前端一律按对象访问（r.payload.date 等）。
+ * 这里在出口统一解析成对象——否则字符串没有 .date/.spend 属性，前端过滤会把所有行剔除，
+ * 表现为「同步/录入成功、看板却始终无数据」。兼容历史脏数据：对象/空串/非法 JSON 都能吞。
+ */
+function parsePayload(raw: any): any {
+  if (raw === null || raw === undefined || raw === '') return {};
+  if (typeof raw === 'object') return raw;
+  try { const o = JSON.parse(raw); return o && typeof o === 'object' ? o : {}; }
+  catch { return {}; }
+}
+
 interface BizBody {
   storeId?: string;
   title?: string;
@@ -71,7 +83,8 @@ export class BizController {
         // 公司级记录（''）全员可见；门店级记录需在该用户可见范围内
         return r.storeId === '' || visible.includes(r.storeId) || user.isSuper;
       })
-      .sort((a, b) => b.createdAt - a.createdAt);
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((r) => ({ ...r, payload: parsePayload(r.payload) }));
   }
 
   /** 新增。 */

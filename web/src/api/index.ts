@@ -183,7 +183,17 @@ export const api = {
   deleteUser: (id: string) => raw(`/users/${id}`, { method: 'DELETE' }),
   updateRole: (code: string, permissions: Record<string, number>) => raw(`/users/roles/${code}`, { method: 'PATCH', body: JSON.stringify({ permissions }) }),
   // 通用业务数据（各模块真实落库）
-  bizList: (type: string, storeId = 'all') => raw(`/biz/${type}?storeId=${encodeURIComponent(storeId)}`),
+  bizList: async (type: string, storeId = 'all') => {
+    const rows: any = await raw(`/biz/${type}?storeId=${encodeURIComponent(storeId)}`);
+    // 兜底：后端 payload 是 text 列存 JSON 字符串。新后端已在出口解析成对象；
+    // 若连的是未升级的旧后端，这里再解析一次，保证各页面 r.payload.xxx 能取到值。
+    if (!Array.isArray(rows)) return rows;
+    return rows.map((r: any) => {
+      if (!r || typeof r.payload !== 'string') return r;
+      try { return { ...r, payload: JSON.parse(r.payload) }; }
+      catch { return { ...r, payload: {} }; }
+    });
+  },
   bizCreate: (type: string, body: any) => raw(`/biz/${type}`, { method: 'POST', body: JSON.stringify(body) }),
   bizUpdate: (type: string, id: string, body: any) => raw(`/biz/${type}/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   bizDelete: (type: string, id: string) => raw(`/biz/${type}/${id}`, { method: 'DELETE' }),
