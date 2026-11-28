@@ -81,6 +81,22 @@ function pickConversions(actions: any[] | undefined, preferred: string): ConvPic
   return { conv: 0, event: '', label: '未识别到转化事件', candidates };
 }
 
+/** 把一行 insights 统一换算成看板指标（花费按账户币种换算，CPA/CPM 口径与看板一致）。 */
+function metricsOf(row: any, rate: number, convAction: string) {
+  const pick = pickConversions(row?.actions, convAction);
+  const spend = Number(((Number(row?.spend) || 0) * rate).toFixed(2));
+  const imp = Number(row?.impressions) || 0;
+  const reach = Number(row?.reach) || 0;
+  const clicks = Number(row?.clicks) || 0;
+  const conv = pick.conv;
+  return {
+    spend, imp, reach, clicks, conv,
+    cpa: conv > 0 ? Number((spend / conv).toFixed(2)) : 0,
+    cpm: imp > 0 ? Number((spend / imp * 1000).toFixed(2)) : 0,
+    convEvent: pick.label,
+  };
+}
+
 @Injectable()
 export class MetaService {
   constructor(private audit: AuditService) {}
@@ -268,6 +284,85 @@ export class MetaService {
     return out;
   }
 
+  /** 通用 Graph 列表分页拉取（最多 10 页），供体系结构与层级 insights 共用。 */
+  private async fetchGraphList(url: string): Promise<any[]> {
+    const out: any[] = [];
+    let next: string | undefined = url;
+    let guard = 0;
+    while (next && guard++ < 10) {
+      const res = await fetch(next, { signal: AbortSignal.timeout(60000) } as any);
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`);
+      out.push(...(Array.isArray(data?.data) ? data.data : []));
+      next = data?.paging?.next;
+    }
+    return out;
+  }
+
+  /** 拉取当前在跑（ACTIVE）的系列/广告组/广告，建立状态集合与归属关系。 */
+  private async fetchActiveTree(c: MetaConfig) {
+    const act = normalizeAct(c.accountId);
+    const url = (node: string, fields: string) => `${GRAPH}/${act}/${node}?`
+      + new URLSearchParams({ fields, limit: '500', access_token: c.accessToken }).toString();
+    // 不同 API 版本对 campaign_id / adset_id 直出字段支持不一，失败时换嵌套对象写法
+    const nodeList = async (node: string, variants: string[]) => {
+      for (const fields of variants) {
+        try {
+          const rows = await this.fetchGraphList(url(node, fields));
+          if (rows.length) return rows;
+        } catch { /* 换下一套字段 */ }
+      }
+      return [] as any[];
+    };
+    const [camps, adsets, ads] = await Promise.all([
+      nodeList('campaigns', ['id,name,effective_status,status']),
+      nodeList('adsets', ['id,name,campaign_id,effective_status,status', 'id,name,campaign{id},effective_status,status']),
+      nodeList('ads', ['id,name,campaign_id,adset_id,effective_status,status', 'id,name,campaign{id},adset{id},effective_status,status']),
+    ]);
+    // 系列状态一个都读不到时不能按「全部关闭」处理，交由调用方降级显示全部
+    if (!camps.length) return null;
+    const active = (r: any) => String(r?.effective_status || r?.status || '').toUpperCase() === 'ACTIVE';
+    const cid = (r: any) => String(r?.campaign_id || r?.campaign?.id || '');
+    const aid = (r: any) => String(r?.adset_id || r?.adset?.id || '');
+    const activeAdsets = adsets.filter(active);
+    const activeAds = ads.filter(active);
+    const adsetsByCampaign = new Map<string, number>();
+    const adsByCampaign = new Map<string, number>();
+    const adsetMeta = new Map<string, { name: string; campaignId: string }>();
+    const adMeta = new Map<string, { name: string; campaignId: string; adsetId: string }>();
+    for (const a of activeAdsets) {
+      const id = String(a.id || ''); const cc = cid(a);
+      if (cc) adsetsByCampaign.set(cc, (adsetsByCampaign.get(cc) || 0) + 1);
+      if (id) adsetMeta.set(id, { name: String(a.name || ''), campaignId: cc });
+    }
+    for (const a of activeAds) {
+      const id = String(a.id || ''); const cc = cid(a);
+      if (cc) adsByCampaign.set(cc, (adsByCampaign.get(cc) || 0) + 1);
+      if (id) adMeta.set(id, { name: String(a.name || ''), campaignId: cc, adsetId: aid(a) });
+    }
+    return {
+      campaignIds: new Set(camps.filter(active).map((r) => String(r.id || ''))),
+      campaignNames: new Map(camps.filter(active).map((r) => [String(r.id || ''), String(r.name || '')])),
+      adsetIds: new Set(adsetMeta.keys()), adIds: new Set(adMeta.keys()),
+      adsetsByCampaign, adsByCampaign, adsetMeta, adMeta,
+    };
+  }
+
+  /** 拉取广告组/广告层级的 insights，只保留 ACTIVE 实体对应的行；失败返回空数组不影响主流程。 */
+  private async fetchTreeInsights(c: MetaConfig, level: 'adset' | 'ad', since: string, until: string) {
+    const variants = level === 'adset'
+      ? ['campaign_id,adset_id,adset_name,spend,impressions,reach,clicks,actions', 'adset_id,spend,impressions,clicks,actions']
+      : ['campaign_id,adset_id,ad_id,ad_name,spend,impressions,reach,clicks,actions', 'ad_id,spend,impressions,clicks,actions'];
+    for (const fields of variants) {
+      try {
+        const out = await this.fetchGraphList(`${GRAPH}/${normalizeAct(c.accountId)}/insights?`
+          + new URLSearchParams({ level, time_range: JSON.stringify({ since, until }), fields, limit: '500', access_token: c.accessToken }).toString());
+        if (out.length) return out;
+      } catch { /* 换下一套字段 */ }
+    }
+    return [];
+  }
+
   /**
    * 按广告系列(campaign)拉取数据，供「广告系列表现」表格使用。
    * Meta Marketing API 用 level=campaign + fields=campaign_id,campaign_name,... 返回每个系列汇总。
@@ -280,6 +375,12 @@ export class MetaService {
     const untilD = until || new Date().toISOString().slice(0, 10);
     const sinceD = since || new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
     const acct = await this.accountCurrency(c);
+    // 并行拉取：在跑的系列/广告组/广告状态 + 层级效果数据；任一失败都降级，不影响主看板数据
+    const [activeTree, adsetRows, adRows] = await Promise.all([
+      this.fetchActiveTree(c).catch(() => null),
+      this.fetchTreeInsights(c, 'adset', sinceD, untilD).catch(() => [] as any[]),
+      this.fetchTreeInsights(c, 'ad', sinceD, untilD).catch(() => [] as any[]),
+    ]);
 
     // 字段组合降级：带 campaign_name 优先，退到只有 campaign_id
     const fieldVariants = [
@@ -328,22 +429,47 @@ export class MetaService {
       if (!v.name && r.campaign_name) v.name = String(r.campaign_name);
       map.set(key, v);
     }
+    // 只保留当前在跑（ACTIVE）的系列；读取状态失败时降级显示全部，避免白屏
     const campaigns = [...map.values()]
+      .filter((v) => !activeTree || !v.campaignId || activeTree.campaignIds.has(v.campaignId))
       .map((v) => ({
         ...v,
-        spend: Number(v.spend.toFixed(2)),
-        // CPA 单次成效费用 = 花费 ÷ 转化（转化 0 时为 0）
-        cpa: v.conv > 0 ? Number((v.spend / v.conv).toFixed(2)) : 0,
-        // CPM 千次曝光成本 = 花费 ÷ 曝光 × 1000
-        cpm: v.imp > 0 ? Number((v.spend / v.imp * 1000).toFixed(2)) : 0,
+        ...metricsOf(v, acct.rate, c.conversionAction),
+        activeAdsets: activeTree?.adsetsByCampaign.get(v.campaignId) || 0,
+        activeAds: activeTree?.adsByCampaign.get(v.campaignId) || 0,
       }))
       .sort((a, b) => b.spend - a.spend);
+
+    // 在跑的广告组 / 广告明细（只列 ACTIVE 实体，效果取层级 insights 的同日期范围）
+    const adsets = activeTree ? [...activeTree.adsetMeta.entries()].map(([id, m]) => {
+      const r = adsetRows.find((x) => String(x?.adset_id || x?.id || '') === id) || {};
+      return {
+        id, name: m.name || String(r.adset_name || '') || id,
+        campaignId: m.campaignId, campaignName: activeTree.campaignNames.get(m.campaignId) || '',
+        ...metricsOf(r, acct.rate, c.conversionAction),
+      };
+    }).sort((a, b) => b.spend - a.spend) : [];
+    const ads = activeTree ? [...activeTree.adMeta.entries()].map(([id, m]) => {
+      const r = adRows.find((x) => String(x?.ad_id || x?.id || '') === id) || {};
+      return {
+        id, name: m.name || String(r.ad_name || '') || id,
+        campaignId: m.campaignId, campaignName: activeTree.campaignNames.get(m.campaignId) || '',
+        adsetId: m.adsetId, adsetName: activeTree.adsetMeta.get(m.adsetId)?.name || '',
+        ...metricsOf(r, acct.rate, c.conversionAction),
+      };
+    }).sort((a, b) => b.spend - a.spend) : [];
+
     return {
       ok: true, since: sinceD, until: untilD,
       accountCurrency: acct.currency, rate: acct.rate, needConvert: acct.needConvert,
-      campaigns, rawRows: list.length,
+      campaigns, adsets, ads,
+      statusFiltered: !!activeTree,
+      totals: { campaigns: campaigns.length, adsets: adsets.length, ads: ads.length },
+      rawRows: list.length,
       convEvents: [...convEvents],
-      message: campaigns.length ? '' : `Meta 在 ${sinceD} ~ ${untilD} 未返回广告系列数据${lastErr ? '：' + lastErr : '。可点「诊断 Meta」排查'}。`,
+      message: campaigns.length
+        ? (activeTree ? '' : '未能读取广告投放状态，已显示全部系列（可能含已关闭系列）')
+        : `Meta 在 ${sinceD} ~ ${untilD} 未返回广告系列数据${lastErr ? '：' + lastErr : '。可点「诊断 Meta」排查'}。`,
     };
   }
 

@@ -27,23 +27,38 @@
       <div class="card"><div class="card-h"><h3>转化漏斗</h3></div><div class="card-b"><div ref="funnelEl" class="chart"></div></div></div>
     </div>
 
-    <!-- 广告系列表现（Meta 实时拉取，按系列显示） -->
+    <!-- 广告系列表现（Meta 实时拉取，只显示在跑的） -->
     <div class="card" style="margin-top:16px" v-if="platform==='meta'"><div class="card-h">
-      <h3>广告系列表现 <span class="page-desc">Meta 全部广告系列 · 按花费排序</span></h3>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span v-if="campaignMeta" class="page-desc">{{campaignMeta.since}} ~ {{campaignMeta.until}} · {{campaignMeta.accountCurrency}} · {{campaigns.length}} 个系列</span>
+      <h3>在投广告系列 <span class="page-desc">仅显示当前在跑（ACTIVE）的系列 · 已关闭系列不显示 · 按花费排序</span></h3>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span v-if="campaignMeta" class="page-desc">{{campaignMeta.since}} ~ {{campaignMeta.until}} · {{campaignMeta.accountCurrency}} · {{campaigns.length}} 个在投系列 / {{adsets.length}} 个在投广告组 / {{ads.length}} 条在投广告</span>
         <el-button size="small" :loading="campaignLoading" @click="loadCampaigns">刷新系列数据</el-button>
       </div>
     </div><div class="card-b" style="padding:0">
-      <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['广告系列','花费','曝光','覆盖','点击','转化','单次成效CPA','千次曝光CPM']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
-        <tr v-for="c in campaigns" :key="c.campaignId || c.name"><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600;max-width:300px">{{c.name || ('系列 '+c.campaignId)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600">¥{{c.spend}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(c.imp)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(c.reach)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(c.clicks)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{c.conv}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600">¥{{c.cpa}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">¥{{c.cpm}}</td></tr>
+      <div v-if="campaignMeta && !campaignMeta.statusFiltered" style="padding:8px 12px;background:#FFF7E6;color:#A86A00;font-size:12px">未能读取 Meta 投放状态，以下可能包含已关闭系列。</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['广告系列','在跑广告组','在跑广告','花费','曝光','覆盖','点击','转化','单次成效CPA','千次曝光CPM']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
+        <tr v-for="c in campaigns" :key="c.campaignId || c.name"><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600;max-width:260px">{{c.name || ('系列 '+c.campaignId)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);color:#0B8E78;font-weight:600">{{c.activeAdsets}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);color:#0B8E78;font-weight:600">{{c.activeAds}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600">¥{{c.spend}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(c.imp)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(c.reach)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{fmt(c.clicks)}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">{{c.conv}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2);font-weight:600">¥{{c.cpa}}</td><td style="padding:11px 12px;border-bottom:1px solid var(--line2)">¥{{c.cpm}}</td></tr>
       </tbody></table>
-      <div v-if="!campaigns.length" style="padding:24px;text-align:center;color:var(--ink2)">{{ campaignMsg || '暂无广告系列数据，点「广告系列」按钮从 Meta 拉取。' }}</div>
+      <div v-if="!campaigns.length" style="padding:24px;text-align:center;color:var(--ink2)">{{ campaignMsg || '暂无在投广告系列，点「广告系列」按钮从 Meta 拉取。' }}</div>
+    </div></div>
+
+    <!-- 在跑的广告组 / 广告效果明细 -->
+    <div class="card" style="margin-top:16px" v-if="platform==='meta' && (adsets.length || ads.length)"><div class="card-h">
+      <h3>在投广告组 / 广告明细 <span class="page-desc">与上方同日期范围 · 只统计在跑的实体 · 按花费排序</span></h3>
+      <div style="display:flex;gap:6px"><el-button size="small" :type="treeTab==='adset'?'primary':''" @click="treeTab='adset'">广告组（{{adsets.length}}）</el-button><el-button size="small" :type="treeTab==='ad'?'primary':''" @click="treeTab='ad'">广告（{{ads.length}}）</el-button></div>
+    </div><div class="card-b" style="padding:0">
+      <table v-if="treeTab==='adset'" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['广告组','所属系列','花费','曝光','点击','转化','单次成效CPA','千次曝光CPM']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
+        <tr v-for="a in adsets" :key="a.id"><td style="padding:10px 12px;border-bottom:1px solid var(--line2);font-weight:600;max-width:240px">{{a.name || a.id}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2);color:var(--ink2)">{{a.campaignName || '—'}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2);font-weight:600">¥{{a.spend}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2)">{{fmt(a.imp)}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2)">{{fmt(a.clicks)}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2)">{{a.conv}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2)">¥{{a.cpa}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2)">¥{{a.cpm}}</td></tr>
+      </tbody></table>
+      <table v-else style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th v-for="h in ['广告','所属广告组','所属系列','花费','曝光','点击','转化','单次成效CPA','千次曝光CPM']" :key="h" style="text-align:left;padding:11px 12px;background:#FAFBF9">{{h}}</th></tr></thead><tbody>
+        <tr v-for="a in ads" :key="a.id"><td style="padding:10px 12px;border-bottom:1px solid var(--line2);font-weight:600;max-width:220px">{{a.name || a.id}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2);color:var(--ink2)">{{a.adsetName || '—'}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2);color:var(--ink2)">{{a.campaignName || '—'}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2);font-weight:600">¥{{a.spend}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2)">{{fmt(a.imp)}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2)">{{fmt(a.clicks)}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2)">{{a.conv}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2)">¥{{a.cpa}}</td><td style="padding:10px 12px;border-bottom:1px solid var(--line2)">¥{{a.cpm}}</td></tr>
+      </tbody></table>
+      <div v-if="(treeTab==='adset' && !adsets.length) || (treeTab==='ad' && !ads.length)" style="padding:24px;text-align:center;color:var(--ink2)">该层级暂无在投数据，点「刷新系列数据」重新拉取。</div>
     </div></div>
 
     <div class="mini-note">
       <b>日期范围</b>：选择后下方 KPI/图表/明细即时筛选只显示该区间数据，点「看全部」恢复全部；点「从 Meta 同步」则按该范围拉取数据。<br>
-      Meta 数据来自官方 Graph API 同步（人民币账户按 1:1 统计，外币按汇率换算）。<b>单次成效费用 CPA = 花费 ÷ 转化</b>，花费越低/转化越高则 CPA 越优。<b>ROAS 口径：{{ roasBasis }}</b>——在「AI 客服接待 → 成交记录」录入真实成交后，ROAS 自动改为「当日成交额 ÷ 当日花费」；未录入成交的日期用「转化 × 客单价 ¥{{aov}}」估算（客单价可在「系统设置 → Meta 投流 → 客单价」修改）。「转化」只统计真实转化事件（购买/线索/私信咨询），已剔除互动噪音。「广告系列」按 Meta 当前日期范围实时拉取全部系列，不在本地留副本。Google Ads 暂为手动录入。AI 分析需先在「AI 模型与密钥」配置 Key。
+      Meta 数据来自官方 Graph API 同步（人民币账户按 1:1 统计，外币按汇率换算）。<b>单次成效费用 CPA = 花费 ÷ 转化</b>，花费越低/转化越高则 CPA 越优。<b>ROAS 口径：{{ roasBasis }}</b>——在「AI 客服接待 → 成交记录」录入真实成交后，ROAS 自动改为「当日成交额 ÷ 当日花费」；未录入成交的日期用「转化 × 客单价 ¥{{aov}}」估算（客单价可在「系统设置 → Meta 投流 → 客单价」修改）。「转化」只统计真实转化事件（购买/线索/私信咨询），已剔除互动噪音。「广告系列」按 Meta 当前日期范围实时拉取当前在跑（ACTIVE）的系列、广告组、广告，已关闭的不显示，不在本地留副本；每个系列显示其在投广告组数/广告数，下方明细可切换查看广告组、广告的花费/曝光/点击/转化/CPA/CPM。Google Ads 暂为手动录入。AI 分析需先在「AI 模型与密钥」配置 Key。
     </div>
 
     <el-dialog v-model="csvDialog" title="导入 Meta 广告 CSV" width="560px">
@@ -135,8 +150,10 @@ const dealByDate = computed(() => {
 const hasDealData = computed(() => scopedDeals.value.length > 0);
 const totalDealAmount = computed(() => scopedDeals.value.reduce((s, d) => s + (Number(d.payload?.amount) || 0), 0));
 const probeDialog = ref(false); const probeLoading = ref(false); const probeResult = ref<any>(null);
-// 广告系列表现（Meta 实时拉取）
+// 广告系列表现（Meta 实时拉取，只显示在投的）
 const campaigns = ref<any[]>([]); const campaignMeta = ref<any>(null);
+const adsets = ref<any[]>([]); const ads = ref<any[]>([]);
+const treeTab = ref<'adset' | 'ad'>('adset');
 const campaignLoading = ref(false); const campaignMsg = ref('');
 const entry = ref<any>({ date: new Date().toISOString().slice(0, 10), spend: 0, imp: 0, clicks: 0, conv: 0, countries: '' });
 const trendEl = ref<HTMLElement | null>(null); const funnelEl = ref<HTMLElement | null>(null);
@@ -292,11 +309,13 @@ async function loadCampaigns() {
     const body = syncRange.value?.length === 2 ? { since: syncRange.value[0], until: syncRange.value[1] } : {};
     const res = await api.metaCampaigns(body);
     campaigns.value = res.campaigns || [];
+    adsets.value = res.adsets || [];
+    ads.value = res.ads || [];
     campaignMeta.value = res;
     campaignMsg.value = res.message || '';
     if (campaigns.value.length) {
       const cur = res.accountCurrency === 'CNY' ? '人民币1:1' : `汇率${res.rate}`;
-      ElMessage.success({ message: `已拉取 ${campaigns.value.length} 个广告系列（${res.since}~${res.until}，${cur}）`, duration: 6000 });
+      ElMessage.success({ message: `已拉取 ${campaigns.value.length} 个在投系列 / ${adsets.value.length} 个在投广告组 / ${ads.value.length} 条在投广告（${res.since}~${res.until}，${cur}）`, duration: 6000 });
     } else {
       ElMessage.warning({ message: res.message || 'Meta 未返回广告系列数据', duration: 8000 });
     }
