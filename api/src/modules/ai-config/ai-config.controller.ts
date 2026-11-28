@@ -168,6 +168,36 @@ export class AiConfigController {
     }
   }
 
+  /** 拉取 OpenAI 兼容网关的可用模型别名（Aiporto 等按别名路由的网关需要先查列表）。 */
+  @Post('models')
+  @RequirePerm('system', PERM.EDIT)
+  async models(@Req() req: Request, @Body() body: { which?: 'global' | 'personal'; apiKey?: string; baseUrl?: string }) {
+    const user = (req as any).authUser as AuthUser;
+    const all = await db.select().from(schema.aiConfigs);
+    const cfg = body.which === 'personal'
+      ? all.find((c) => c.scope === 'user' && c.scopeId === user.id)
+      : (all.find((c) => c.scope === 'platform') || all.find((c) => c.isDefault));
+    let apiKey = (body.apiKey || '').trim();
+    if (!apiKey && cfg?.apiKeyEnc) { try { apiKey = decrypt(cfg.apiKeyEnc); } catch { /* 重新录入 */ } }
+    if (!apiKey) throw new BadRequestException('请先保存 API Key 再拉取模型列表');
+    const base = (body.baseUrl || '').trim().replace(/\/$/, '') || (cfg?.baseUrl || '').replace(/\/$/, '') || 'https://gw.aiporto.net/v1';
+    const url = base.endsWith('/models') ? base : `${base}/models`;
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(15000),
+      } as any);
+      const text = await res.text();
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
+      const data: any = JSON.parse(text);
+      const items = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+      const models = items.map((m: any) => (typeof m === 'string' ? m : m?.id || m?.name)).filter(Boolean);
+      return { ok: true, models };
+    } catch (e: any) {
+      throw new BadRequestException(`拉取模型列表失败：${e?.message || e}`);
+    }
+  }
+
   /** 测试连接：后端用已保存的 Key 调一次 OpenAI 兼容 chat 接口，不把 Key 返回前端。 */
   @Post('test')
   @RequirePerm('system', PERM.EDIT)

@@ -654,6 +654,7 @@ const AUDIT=[
   {t:'11-20 09:12',u:'审计员',s:'全部门店',op:'导出经营月报',m:'总览',r:'成功'}
 ];
 const PROVIDERS=[
+  {id:'aiporto',name:'Aiporto 智港',desc:'一个 Key 接入多家大模型 · 注册购买套餐后领取 Key 即可对接',base:'https://gw.aiporto.net/v1',model:'模型别名（购买套餐后从 /v1/models 获取）',tag:'推荐',color:'#12B39A',links:[{label:'免费注册',href:'https://www.aiporto.net/register'},{label:'选择套餐',href:'https://www.aiporto.net/plans'},{label:'订单领 Key',href:'https://www.aiporto.net/orders'},{label:'接入指南',href:'https://www.aiporto.net/docs'}]},
   {id:'deepseek',name:'DeepSeek',desc:'默认模型 · OpenAI 兼容',base:'https://api.deepseek.com',model:'deepseek-v4-pro',tag:'默认',color:'#4A6CF7'},
   {id:'arkplan',name:'方舟 Agent Plan',desc:'订阅制 AFP · 含多模态/视频',base:'ark.cn-beijing.volces.com/api/plan/v3',model:'doubao-seed-2.0-pro',tag:'默认',color:'#E8582F'},
   {id:'ark',name:'方舟 Ark（按量）',desc:'独立端点 · 接入点 ep-xxx',base:'https://ark.cn-beijing.volces.com/api/v3',model:'ep-2026xxxx',tag:'',color:'#E88A2F'},
@@ -920,11 +921,11 @@ function renderPermission(){
 /* ============ AI 设置 ============ */
 function renderAIConfig(){
   $('#globalAI').innerHTML=`<div class="grid g3">
-    <div class="form-row" style="margin:0"><label>默认供应商</label><select><option>DeepSeek</option><option>方舟 Agent Plan</option></select></div>
+    <div class="form-row" style="margin:0"><label>默认供应商</label><select><option>Aiporto 智港</option><option>DeepSeek</option><option>方舟 Agent Plan</option></select></div>
     <div class="form-row" style="margin:0"><label>默认模型</label><select><option>deepseek-v4-pro</option><option>deepseek-v4-flash</option></select></div>
     <div class="form-row" style="margin:0"><label>全局 API Key</label><input type="password" value="sk-••••••••••••••••••••"></div>
   </div><div class="mini-note" style="margin-top:14px"><svg class="icon"><use href="#i-key"/></svg>由总管理员统一配置，所有用户未配置个人 Key 时回退使用。Key 加密存储，不在前端明文展示。</div>`;
-  $('#providerCards').innerHTML=PROVIDERS.map(p=>`<div style="border:1px solid var(--line);border-radius:10px;padding:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="width:10px;height:10px;border-radius:50%;background:${p.color}"></span><b>${p.name}</b>${p.tag?'<span class="tag g">'+p.tag+'</span>':''}</div><div style="font-size:12px;color:var(--ink2);line-height:1.9"><div>${p.desc}</div><div style="font-family:monospace;font-size:11px;color:var(--ink3)">${p.base}</div><div>模型：${p.model}</div></div><div style="margin-top:10px;display:flex;gap:8px"><button class="btn btn-ghost btn-sm" onclick="toast('连通测试成功 · ${p.name}')">测试连接</button><button class="btn btn-ghost btn-sm" onclick="toast('配置窗口（演示）')">配置</button></div></div>`).join('');
+  $('#providerCards').innerHTML=PROVIDERS.map(p=>`<div style="border:1px solid var(--line);border-radius:10px;padding:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="width:10px;height:10px;border-radius:50%;background:${p.color}"></span><b>${p.name}</b>${p.tag?'<span class="tag g">'+p.tag+'</span>':''}</div><div style="font-size:12px;color:var(--ink2);line-height:1.9"><div>${p.desc}</div><div style="font-family:monospace;font-size:11px;color:var(--ink3)">${p.base}</div><div>模型：${p.model}</div></div>${p.links?'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">'+p.links.map(l=>`<a href="${l.href}" target="_blank" rel="noopener" style="color:var(--gold);font-size:11px;text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 7px">${l.label} ↗</a>`).join('')+'</div>':''}<div style="margin-top:10px;display:flex;gap:8px"><button class="btn btn-ghost btn-sm" onclick="toast('连通测试成功 · ${p.name}')">测试连接</button><button class="btn btn-ghost btn-sm" onclick="toast('配置窗口（演示）')">配置</button></div></div>`).join('');
   const scenes=[['店铺对账核对','视觉识别 + 结构化提取','DeepSeek V4 Pro','0.2'],['投流数据分析','推理 / 归因','DeepSeek V4 Pro','0.3'],['自媒体内容创作','多模态生成','方舟 Agent Plan','0.8'],['AI 客服回复','知识库问答','DeepSeek V4 Flash','0.5'],['视频生成','图生视频','方舟 Seedance 2.0','—']];
   $('#sceneTable').innerHTML=scenes.map(s=>`<tr><td style="font-weight:600">${s[0]}</td><td style="color:var(--ink2)">${s[1]}</td><td><span class="tag g">${s[2]}</span></td><td class="num">${s[3]}</td><td><button class="btn btn-ghost btn-sm" onclick="toast('修改场景绑定（演示）')">修改</button></td></tr>`).join('');
 }
